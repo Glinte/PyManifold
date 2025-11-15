@@ -14,6 +14,7 @@ dependencies = [
     "numpy>=1.23.1",
     "deal>=4.24.5",
     "beartype>=0.22.5",
+    "aiohttp>=3.13.2",
 ]
 
 [dependency-groups]
