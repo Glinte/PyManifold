@@ -1,7 +1,5 @@
 """Contains the various types of data that Manifold can return."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from inspect import signature
 from typing import TYPE_CHECKING, Dict, Mapping, Sequence, Union

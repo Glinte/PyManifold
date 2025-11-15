@@ -1,7 +1,5 @@
 """Contains a function to calculate the optimal bet if your estimated probability is the true probability."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Dict, Literal, cast
 
 from numpy import argmax
