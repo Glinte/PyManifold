@@ -1,12 +1,11 @@
 """Contains a function to calculate the optimal bet if your estimated probability is the true probability."""
 
-from typing import TYPE_CHECKING, Dict, Literal, cast
+from typing import Dict, Literal, cast
 
 from numpy import argmax
 from numpy import log as ln
 
-if TYPE_CHECKING:  # pragma: no cover
-    from ..types import Market
+from ..types import Market
 
 
 def expected_log_wealth(
