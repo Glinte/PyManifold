@@ -10,7 +10,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def expected_log_wealth(
-    market: Market,
+    market: "Market",
     sub_prob: float,
     bet: float,
     outcome: Literal["YES", "NO"],
@@ -32,7 +32,7 @@ def expected_log_wealth(
     return E
 
 
-def shares_bought(market: Market, bet: float, outcome: Literal["YES", "NO"]) -> float:
+def shares_bought(market: "Market", bet: float, outcome: Literal["YES", "NO"]) -> float:
     """Figure out the number of shares a given purchace yields.
 
     Returns the number of shares and the resulting pool. This function assumes Manifold Markets are using
@@ -79,7 +79,7 @@ def shares_bought(market: Market, bet: float, outcome: Literal["YES", "NO"]) -> 
 
 
 def kelly_calc(
-    market: Market, subjective_prob: float, balance: int
+    market: "Market", subjective_prob: float, balance: int
 ) -> tuple[int, Literal["YES", "NO"]]:
     """For a given binary market, find the bet that maximises expected log wealth."""
     # figure out which option to buy

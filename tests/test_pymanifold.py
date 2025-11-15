@@ -1,14 +1,13 @@
 from os import getenv
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping
+from typing import Any, Mapping
 
+import pytest
 from markdown import markdown
 from pymanifold import ManifoldClient, __version__
-from pymanifold.types import Group, Market
+from pymanifold.types import Bet, Group, JSONDict, LiteMarket, LiteUser, Market
 from vcr import VCR
 
-if TYPE_CHECKING:  # pragma: no cover
-    from pymanifold.types import Bet, JSONDict, LiteMarket, LiteUser
 
 API_KEY = getenv("MANIFOLD_API_KEY", "fake_api_key")
 LOCAL_FOLDER = str(Path(__file__).parent)
@@ -142,6 +141,23 @@ tiptap_comment: JSONDict = {
         },
     ],
 }
+
+
+class DummyResponse:
+    """Minimal response stub for request interception in unit tests."""
+
+    def __init__(self, payload: Any):
+        self._payload = payload
+
+    def json(self) -> Any:
+        """Return the stored payload."""
+
+        return self._payload
+
+    def raise_for_status(self) -> None:
+        """Mirror requests.Response.raise_for_status with a no-op."""
+
+        return None
 
 
 def test_version() -> None:
@@ -371,6 +387,175 @@ def test_resolve_market_pseudo_numeric() -> None:
 def test_cancel_market() -> None:
     client = ManifoldClient(api_key=API_KEY)
     client.cancel_market("H8Dc6yCj4TkvJfoOitYr")
+
+
+def test_get_markets_includes_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_get(*, url: str, params: dict[str, Any]) -> DummyResponse:
+        captured["url"] = url
+        captured["params"] = params
+        return DummyResponse(
+            [
+                {
+                    "id": "m1",
+                    "creatorId": "c1",
+                    "creatorUsername": "user",
+                    "creatorName": "User",
+                }
+            ]
+        )
+
+    monkeypatch.setattr("pymanifold.lib.requests.get", fake_get)
+
+    client = ManifoldClient()
+    markets = list(
+        client.get_markets(
+            limit=10,
+            before="before-id",
+            sort="last-bet-time",
+            order="asc",
+            userId="uid",
+            groupId="gid",
+        )
+    )
+
+    assert captured["url"].endswith("/markets")
+    assert captured["params"] == {
+        "limit": 10,
+        "before": "before-id",
+        "sort": "last-bet-time",
+        "order": "asc",
+        "userId": "uid",
+        "groupId": "gid",
+    }
+    assert markets[0].id == "m1"
+
+
+def test_get_groups_supports_before_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_get(*, url: str, params: dict[str, Any]) -> DummyResponse:
+        captured["url"] = url
+        captured["params"] = params
+        return DummyResponse([{"id": "g1", "name": "Group", "creatorId": "creator"}])
+
+    monkeypatch.setattr("pymanifold.lib.requests.get", fake_get)
+
+    client = ManifoldClient()
+    groups = list(client.get_groups(availableToUserId="uid", beforeTime=123))
+
+    assert captured["url"].endswith("/groups")
+    assert captured["params"] == {"availableToUserId": "uid", "beforeTime": 123}
+    assert groups[0].id == "g1"
+
+
+def test_get_bets_includes_new_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_get(*, url: str, params: dict[str, Any]) -> DummyResponse:
+        captured["url"] = url
+        captured["params"] = params
+        return DummyResponse(
+            [
+                {
+                    "id": "b1",
+                    "contractId": "c1",
+                    "amount": 5,
+                    "createdTime": 1,
+                }
+            ]
+        )
+
+    monkeypatch.setattr("pymanifold.lib.requests.get", fake_get)
+
+    client = ManifoldClient()
+    bets = list(
+        client.get_bets(
+            limit=50,
+            before="before-bet",
+            username="name",
+            market="legacy",
+            userId="uid",
+            contractId=["c1", "c2"],
+            contractSlug="slug",
+            after="after-bet",
+            beforeTime=111,
+            afterTime=42,
+            kinds=["open-limit", "other"],
+            order="asc",
+        )
+    )
+
+    assert captured["url"].endswith("/bets")
+    assert captured["params"] == {
+        "limit": 50,
+        "before": "before-bet",
+        "username": "name",
+        "userId": "uid",
+        "contractSlug": "slug",
+        "after": "after-bet",
+        "beforeTime": 111,
+        "afterTime": 42,
+        "order": "asc",
+        "contractId": ["c1", "c2"],
+        "kinds": "open-limit,other",
+    }
+    assert bets[0].id == "b1"
+
+
+def test_get_bets_supports_market_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_get(*, url: str, params: dict[str, Any]) -> DummyResponse:
+        captured["params"] = params
+        return DummyResponse(
+            [{"id": "b2", "contractId": "legacy", "amount": 1, "createdTime": 2}]
+        )
+
+    monkeypatch.setattr("pymanifold.lib.requests.get", fake_get)
+
+    client = ManifoldClient()
+    list(client.get_bets(market="legacy"))
+
+    assert captured["params"] == {"contractId": "legacy"}
+
+
+def test_create_bet_accepts_optional_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_post(
+        *, url: str, json: dict[str, Any], headers: dict[str, str]
+    ) -> DummyResponse:
+        captured["url"] = url
+        captured["json"] = json
+        captured["headers"] = headers
+        return DummyResponse({"betId": "bid"})
+
+    monkeypatch.setattr("pymanifold.lib.requests.post", fake_post)
+
+    client = ManifoldClient(api_key="key")
+    bet_id = client.create_bet(
+        contractId="c1",
+        amount=10,
+        outcome="YES",
+        limitProb=0.5,
+        expiresAt=123,
+        expiresMillisAfter=456,
+        dryRun=True,
+    )
+
+    assert bet_id == "bid"
+    assert captured["json"] == {
+        "amount": 10,
+        "contractId": "c1",
+        "outcome": "YES",
+        "limitProb": 0.5,
+        "expiresAt": 123,
+        "expiresMillisAfter": 456,
+        "dryRun": True,
+    }
+    assert captured["headers"]["Authorization"] == "Key key"
 
 
 def validate_lite_market(market: LiteMarket) -> None:
