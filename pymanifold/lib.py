@@ -75,7 +75,13 @@ class ManifoldClient:
     ) -> Iterable[Bet]:
         """Iterate over all bets."""
         response = requests.get(
-            url=BASE_URI + "/bets", params={"limit": limit, "before": before, "username": username, "market": market}
+            url=BASE_URI + "/bets",
+            params={
+                "limit": limit,
+                "before": before,
+                "username": username,
+                "market": market,
+            },
         )
         return (Bet.from_dict(market) for market in response.json())
 
@@ -137,7 +143,13 @@ class ManifoldClient:
         response.raise_for_status()
         return response
 
-    def create_bet(self, contractId: str, amount: int, outcome: str, limitProb: Optional[float] = None) -> str:
+    def create_bet(
+        self,
+        contractId: str,
+        amount: int,
+        outcome: str,
+        limitProb: Optional[float] = None,
+    ) -> str:
         """Place a bet.
 
         Returns the ID of the created bet.
@@ -148,7 +160,7 @@ class ManifoldClient:
             "outcome": outcome,
         }
         if limitProb is not None:
-            json['limitProb'] = limitProb
+            json["limitProb"] = limitProb
         response = requests.post(
             url=BASE_URI + "/bet",
             json=json,
@@ -270,11 +282,17 @@ class ManifoldClient:
             # Sometimes when there is a serverside error the market is still posted
             # We want to make sure we still return it in those instances
             for mkt in self.list_markets():
-                if (question, outcomeType, closeTime) == (mkt.question, mkt.outcomeType, mkt.closeTime):
+                if (question, outcomeType, closeTime) == (
+                    mkt.question,
+                    mkt.outcomeType,
+                    mkt.closeTime,
+                ):
                     return mkt
         return LiteMarket.from_dict(response.json())
 
-    def resolve_market(self, market: Union[LiteMarket, str], *args: Any, **kwargs: Any) -> requests.Response:
+    def resolve_market(
+        self, market: Union[LiteMarket, str], *args: Any, **kwargs: Any
+    ) -> requests.Response:
         """Resolve a market, with different inputs depending on its type."""
         if not isinstance(market, LiteMarket):
             market = self.get_market_by_id(market)
@@ -289,7 +307,9 @@ class ManifoldClient:
         else:  # pragma: no cover
             raise NotImplementedError()
 
-    def _resolve_binary_market(self, market: LiteMarket, probabilityInt: float) -> requests.Response:
+    def _resolve_binary_market(
+        self, market: LiteMarket, probabilityInt: float
+    ) -> requests.Response:
         if probabilityInt == 100 or probabilityInt is True:
             json: Dict[str, Union[float, str]] = {"outcome": "YES"}
         elif probabilityInt == 0 or probabilityInt is False:
@@ -310,7 +330,9 @@ class ManifoldClient:
     ) -> requests.Response:
         assert market.min is not None
         assert market.max is not None
-        prob = 100 * number_to_prob_cpmm1(resolutionValue, market.min, market.max, bool(market.isLogScale))
+        prob = 100 * number_to_prob_cpmm1(
+            resolutionValue, market.min, market.max, bool(market.isLogScale)
+        )
         json = {"outcome": "MKT", "value": resolutionValue, "probabilityInt": prob}
         response = requests.post(
             url=BASE_URI + "/market/" + market.id + "/resolve",
@@ -320,7 +342,9 @@ class ManifoldClient:
         response.raise_for_status()
         return response
 
-    def _resolve_free_response_market(self, market: LiteMarket, weights: Dict[int, float]) -> requests.Response:
+    def _resolve_free_response_market(
+        self, market: LiteMarket, weights: Dict[int, float]
+    ) -> requests.Response:
         if len(weights) == 1:
             json: JSONDict = {"outcome": next(iter(weights))}
         else:
@@ -330,7 +354,7 @@ class ManifoldClient:
                 "resolutions": [
                     {"answer": index, "pct": 100 * weight / total}
                     for index, weight in weights.items()
-                ]
+                ],
             }
         response = requests.post(
             url=BASE_URI + "/market/" + market.id + "/resolve",
@@ -342,20 +366,20 @@ class ManifoldClient:
 
     _resolve_multiple_choice_market = _resolve_free_response_market
 
-    def _resolve_numeric_market(self, market: LiteMarket, number: float) -> requests.Response:
+    def _resolve_numeric_market(
+        self, market: LiteMarket, number: float
+    ) -> requests.Response:
         raise NotImplementedError("TODO: I suspect the relevant docs are out of date")
 
     @overload
     def create_comment(
-        self, market: LiteMarket | str, comment: str, mode: Literal['markdown', 'html']
-    ) -> requests.Response:
-        ...
+        self, market: LiteMarket | str, comment: str, mode: Literal["markdown", "html"]
+    ) -> requests.Response: ...
 
     @overload
     def create_comment(
-        self, market: LiteMarket | str, comment: JSONDict, mode: Literal['tiptap']
-    ) -> requests.Response:
-        ...
+        self, market: LiteMarket | str, comment: JSONDict, mode: Literal["tiptap"]
+    ) -> requests.Response: ...
 
     def create_comment(
         self, market: LiteMarket | str, comment: str | JSONDict, mode: str
@@ -363,13 +387,13 @@ class ManifoldClient:
         """Create a comment on a given market, using Markdown, HTML, or TipTap formatting."""
         if isinstance(market, LiteMarket):
             market = market.id
-        data: JSONDict = {'contractId': market}
-        if mode == 'tiptap':
-            data['content'] = comment
-        elif mode == 'html':
-            data['html'] = comment
-        elif mode == 'markdown':
-            data['markdown'] = comment
+        data: JSONDict = {"contractId": market}
+        if mode == "tiptap":
+            data["content"] = comment
+        elif mode == "html":
+            data["html"] = comment
+        elif mode == "markdown":
+            data["markdown"] = comment
         else:
             raise ValueError("Invalid format mode")
         response = requests.post(

@@ -12,7 +12,9 @@ if TYPE_CHECKING:  # pragma: no cover
     T = TypeVar("T")
 
 # To check with mypy, pass in `--enable-recursive-aliases`
-JSONType = Union[int, float, bool, str, None, Sequence['JSONType'], Mapping[str, 'JSONType']]
+JSONType = Union[
+    int, float, bool, str, None, Sequence["JSONType"], Mapping[str, "JSONType"]
+]
 JSONDict = Dict[str, JSONType]
 
 
@@ -86,7 +88,9 @@ class LiteMarket(DictDeserializable):
     # description: str
     tags: List[str]
 
-    outcomeType: Literal["BINARY", "FREE_RESPONSE", "NUMERIC", "PSEUDO_NUMERIC", "MULTIPLE_CHOICE"]
+    outcomeType: Literal[
+        "BINARY", "FREE_RESPONSE", "NUMERIC", "PSEUDO_NUMERIC", "MULTIPLE_CHOICE"
+    ]
     pool: float | Mapping[str, float] | None
     volume7Days: float
     volume24Hours: float
@@ -125,11 +129,11 @@ class Market(LiteMarket):
     answers: Optional[List[Dict[str, Union[str, float]]]] = None
 
     @classmethod
-    def from_dict(cls, env: JSONDict) -> 'Market':
+    def from_dict(cls, env: JSONDict) -> "Market":
         """Take a dictionary and return an instance of the associated class."""
         market = super(Market, cls).from_dict(env)
-        bets: Sequence[JSONDict] = env['bets']  # type: ignore[assignment]
-        comments: Sequence[JSONDict] = env['comments']  # type: ignore[assignment]
+        bets: Sequence[JSONDict] = env["bets"]  # type: ignore[assignment]
+        comments: Sequence[JSONDict] = env["comments"]  # type: ignore[assignment]
         market.bets = [Bet.from_dict(bet) for bet in bets]
         market.comments = [Comment.from_dict(bet) for bet in comments]
         return market
@@ -151,11 +155,11 @@ class Group(DictDeserializable):
     slug: str = ""
     about: str = ""
 
-    def contracts(self, client: 'ManifoldClient') -> Iterable[Market]:
+    def contracts(self, client: "ManifoldClient") -> Iterable[Market]:
         """Iterate over the markets in this group."""
         return (client.get_market_by_id(id_) for id_ in self.contractIds)
 
-    def members(self, client: 'ManifoldClient') -> Iterable["LiteUser"]:
+    def members(self, client: "ManifoldClient") -> Iterable["LiteUser"]:
         """Iterate over the users in this group."""
         return (client.get_user(id_) for id_ in self.memberIds)
 
