@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict, cast, overload
 
 import requests
 
-from .types import Bet, Group, JSONDict, LiteMarket, LiteUser, Market
+from .types import Bet, Comment, Group, JSONDict, LiteMarket, LiteUser, Market
 from .utils.math import number_to_prob_cpmm1
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -20,12 +20,14 @@ class ManifoldClient:
         """Initialize a Manifold client, optionally with an API key."""
         self.api_key = api_key
 
+    # TODO: Expose the remaining filters supported by GET /v0/markets.
     def list_markets(
         self, limit: Optional[int] = None, before: Optional[str] = None
     ) -> List[LiteMarket]:
         """List all markets."""
         return list(self.get_markets(limit, before))
 
+    # TODO: Expose the remaining filters supported by GET /v0/markets.
     def get_markets(
         self, limit: Optional[int] = None, before: Optional[str] = None
     ) -> Iterable[LiteMarket]:
@@ -35,10 +37,12 @@ class ManifoldClient:
         )
         return (LiteMarket.from_dict(market) for market in response.json())
 
+    # TODO: Add the beforeTime filter supported by GET /v0/groups.
     def list_groups(self, availableToUserId: Optional[str] = None) -> List[Group]:
         """List all markets."""
         return list(self.get_groups(availableToUserId))
 
+    # TODO: Add the beforeTime filter supported by GET /v0/groups.
     def get_groups(self, availableToUserId: Optional[str] = None) -> Iterable[Group]:
         """Iterate over all markets."""
         response = requests.get(
@@ -56,6 +60,7 @@ class ManifoldClient:
             raise ValueError("Requires one or more of (slug, id_)")
         return Group.from_dict(response.json())
 
+    # TODO: Support the full GET /v0/bets query parameters.
     def list_bets(
         self,
         limit: Optional[int] = None,
@@ -66,6 +71,7 @@ class ManifoldClient:
         """List all bets."""
         return list(self.get_bets(limit, before, username, market))
 
+    # TODO: Support the full GET /v0/bets query parameters.
     def get_bets(
         self,
         limit: Optional[int] = None,
@@ -121,6 +127,220 @@ class ManifoldClient:
         response = requests.get(url=BASE_URI + "/user/" + handle)
         return cast(JSONDict, response.json())
 
+    # FIXME: Add a DisplayUser dataclass for lite user responses.
+    def get_user_lite(self, handle: str) -> Any:
+        """Get basic public information for a user by username.
+
+        Args:
+            handle: The username to look up.
+
+        Returns:
+            Any: Placeholder for the DisplayUser payload.
+
+        """
+        raise NotImplementedError()
+
+    def get_user_by_id(self, user_id: str) -> LiteUser:
+        """Get a user by ID.
+
+        Args:
+            user_id: The unique identifier to fetch.
+
+        Returns:
+            LiteUser: Placeholder for the /v0/user/by-id response.
+
+        """
+        raise NotImplementedError()
+
+    # FIXME: Add a DisplayUser dataclass for lite user responses.
+    def get_user_by_id_lite(self, user_id: str) -> Any:
+        """Get basic public information for a user by ID.
+
+        Args:
+            user_id: The user identifier to look up.
+
+        Returns:
+            Any: Placeholder for the DisplayUser payload.
+
+        """
+        raise NotImplementedError()
+
+    def get_authenticated_user(self) -> LiteUser:
+        """Return the authenticated user profile.
+
+        Returns:
+            LiteUser: Placeholder for the authenticated user payload.
+
+        """
+        raise NotImplementedError()
+
+    def get_user_bets_deprecated(self, username: str) -> List[Bet]:
+        """Get bets for a user via the deprecated /v0/user/[username]/bets endpoint.
+
+        Args:
+            username: The username whose bets should be retrieved.
+
+        Returns:
+            List[Bet]: Placeholder for the bet list returned by the legacy endpoint.
+
+        """
+        raise NotImplementedError()
+
+    def get_user_portfolio(self, user_id: str) -> JSONDict:
+        """Get live portfolio metrics for the given user.
+
+        Args:
+            user_id: The identifier of the user.
+
+        Returns:
+            JSONDict: Placeholder for the live portfolio metrics response.
+
+        """
+        raise NotImplementedError()
+
+    def get_user_portfolio_history(self, user_id: str, period: str) -> List[JSONDict]:
+        """Get historical portfolio metrics for the given user.
+
+        Args:
+            user_id: The identifier of the user.
+            period: The history bucket to request.
+
+        Returns:
+            List[JSONDict]: Placeholder for the historical portfolio data.
+
+        """
+        raise NotImplementedError()
+
+    def get_group_markets_by_id(self, group_id: str) -> List[LiteMarket]:
+        """Get markets associated with a group via /v0/group/by-id/[id]/markets.
+
+        Args:
+            group_id: The group identifier from the API response.
+
+        Returns:
+            List[LiteMarket]: Placeholder for the group market list.
+
+        """
+        raise NotImplementedError()
+
+    def search_markets(
+        self,
+        term: str,
+        sort: Optional[str] = None,
+        filter_: Optional[str] = None,
+        contractType: Optional[str] = None,
+        topicSlug: Optional[str] = None,
+        creatorId: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        liquidity: Optional[float] = None,
+    ) -> List[LiteMarket]:
+        """Search or filter markets via GET /v0/search-markets.
+
+        Args:
+            term: The query string.
+            sort: Optional sort mode.
+            filter_: Optional closing-state filter.
+            contractType: Optional contract type filter.
+            topicSlug: Optional topic slug.
+            creatorId: Optional creator identifier filter.
+            limit: Optional maximum number of markets.
+            offset: Optional offset for pagination.
+            liquidity: Optional minimum liquidity threshold.
+
+        Returns:
+            List[LiteMarket]: Placeholder for the matching markets.
+
+        """
+        raise NotImplementedError()
+
+    def get_market_probability(self, market_id: str) -> JSONDict:
+        """Get cached probability data for a single market.
+
+        Args:
+            market_id: The market identifier.
+
+        Returns:
+            JSONDict: Placeholder for the probability payload.
+
+        """
+        raise NotImplementedError()
+
+    def get_market_probabilities(self, market_ids: Sequence[str]) -> JSONDict:
+        """Get cached probability data for multiple markets.
+
+        Args:
+            market_ids: The contract identifiers to query.
+
+        Returns:
+            JSONDict: Placeholder for the probability batch response.
+
+        """
+        raise NotImplementedError()
+
+    def get_market_positions(
+        self,
+        market_id: str,
+        order: Optional[str] = None,
+        top: Optional[int] = None,
+        bottom: Optional[int] = None,
+        userId: Optional[str] = None,
+        answerId: Optional[str] = None,
+    ) -> List[JSONDict]:
+        """Get position data for a market via GET /v0/market/[marketId]/positions.
+
+        Args:
+            market_id: The contract identifier.
+            order: Optional ordering field.
+            top: Optional number of top positions.
+            bottom: Optional number of bottom positions.
+            userId: Optional user identifier to filter for.
+            answerId: Optional answer identifier for multi-choice markets.
+
+        Returns:
+            List[JSONDict]: Placeholder for the position summaries.
+
+        """
+        raise NotImplementedError()
+
+    def get_user_contract_metrics_with_contracts(
+        self,
+        user_id: str,
+        limit: int,
+        offset: Optional[int] = None,
+        order: Optional[str] = None,
+        perAnswer: Optional[bool] = None,
+    ) -> JSONDict:
+        """Get a user's contract metrics bundled with market data.
+
+        Args:
+            user_id: The identifier of the user.
+            limit: The number of markets to retrieve.
+            offset: Optional pagination offset.
+            order: Optional sort order.
+            perAnswer: Whether to return per-answer metrics.
+
+        Returns:
+            JSONDict: Placeholder for the metrics-with-contracts payload.
+
+        """
+        raise NotImplementedError()
+
+    def list_users(
+        self, limit: Optional[int] = None, before: Optional[str] = None
+    ) -> List[LiteUser]:
+        """List users via GET /v0/users.
+
+        Args:
+            limit: Optional maximum number of users.
+            before: Optional paging cursor.
+
+        Returns:
+            List[LiteUser]: Placeholder for the returned users.
+
+        """
+        raise NotImplementedError()
+
     def _auth_headers(self) -> dict[str, str]:
         if self.api_key:
             return {"Authorization": "Key " + self.api_key}
@@ -143,6 +363,7 @@ class ManifoldClient:
         response.raise_for_status()
         return response
 
+    # TODO: Support expiresAt, expiresMillisAfter, dryRun, and return the Bet payload.
     def create_bet(
         self,
         contractId: str,
@@ -231,6 +452,7 @@ class ManifoldClient:
             "BINARY", question, description, closeTime, tags, initialProb=initialProb
         )
 
+    # TODO: Support the expanded POST /v0/market payload (visibility, groups, etc.).
     def _create_market(
         self,
         outcomeType: str,
@@ -370,6 +592,231 @@ class ManifoldClient:
         self, market: LiteMarket, number: float
     ) -> requests.Response:
         raise NotImplementedError("TODO: I suspect the relevant docs are out of date")
+
+    def get_market_comments(
+        self,
+        contractId: Optional[str] = None,
+        contractSlug: Optional[str] = None,
+        limit: Optional[int] = None,
+        page: Optional[int] = None,
+        userId: Optional[str] = None,
+        order: Optional[str] = None,
+    ) -> List[Comment]:
+        """Get comments via GET /v0/comments.
+
+        Args:
+            contractId: Optional market identifier to filter by.
+            contractSlug: Optional market slug to filter by.
+            limit: Optional maximum number of comments.
+            page: Optional pagination page.
+            userId: Optional user identifier to filter by.
+            order: Optional order specifier.
+
+        Returns:
+            List[Comment]: Placeholder for the comment list.
+
+        """
+        raise NotImplementedError()
+
+    def create_multi_bet(
+        self,
+        contractId: str,
+        answerIds: Sequence[str],
+        amount: int,
+        limitProb: Optional[float] = None,
+        expiresAt: Optional[int] = None,
+    ) -> JSONDict:
+        """Place a multi-answer bet via POST /v0/multi-bet.
+
+        Args:
+            contractId: The market to bet on.
+            answerIds: The answers to buy shares in.
+            amount: The mana amount to spend.
+            limitProb: Optional limit probability.
+            expiresAt: Optional cancellation timestamp.
+
+        Returns:
+            JSONDict: Placeholder for the created order payload.
+
+        """
+        raise NotImplementedError()
+
+    def cancel_bet(self, bet_id: str) -> requests.Response:
+        """Cancel a limit order via POST /v0/bet/cancel/[id].
+
+        Args:
+            bet_id: The identifier of the bet to cancel.
+
+        Returns:
+            requests.Response: Placeholder for the cancellation response.
+
+        """
+        raise NotImplementedError()
+
+    def add_market_answer(self, market_id: str, text: str) -> JSONDict:
+        """Add an answer to a market via POST /v0/market/[marketId]/answer.
+
+        Args:
+            market_id: The contract receiving a new answer.
+            text: The answer text.
+
+        Returns:
+            JSONDict: Placeholder for the new answer payload.
+
+        """
+        raise NotImplementedError()
+
+    def add_market_liquidity(self, market_id: str, amount: int) -> JSONDict:
+        """Add liquidity via POST /v0/market/[marketId]/add-liquidity.
+
+        Args:
+            market_id: The contract identifier.
+            amount: The mana amount to add.
+
+        Returns:
+            JSONDict: Placeholder for the liquidity transaction.
+
+        """
+        raise NotImplementedError()
+
+    def add_market_bounty(self, market_id: str, amount: int) -> JSONDict:
+        """Add bounty funds via POST /v0/market/[marketId]/add-bounty.
+
+        Args:
+            market_id: The bounty market identifier.
+            amount: The additional bounty amount.
+
+        Returns:
+            JSONDict: Placeholder for the bounty transaction.
+
+        """
+        raise NotImplementedError()
+
+    def award_market_bounty(
+        self, market_id: str, amount: int, commentId: str
+    ) -> JSONDict:
+        """Award a bounty via POST /v0/market/[marketId]/award-bounty.
+
+        Args:
+            market_id: The market identifier.
+            amount: The bounty payout amount.
+            commentId: The comment receiving the reward.
+
+        Returns:
+            JSONDict: Placeholder for the resulting transaction.
+
+        """
+        raise NotImplementedError()
+
+    def close_market_early(
+        self, market_id: str, closeTime: Optional[int] = None
+    ) -> JSONDict:
+        """Close a market via POST /v0/market/[marketId]/close.
+
+        Args:
+            market_id: The market identifier.
+            closeTime: Optional timestamp at which to close.
+
+        Returns:
+            JSONDict: Placeholder for the closure payload.
+
+        """
+        raise NotImplementedError()
+
+    def update_market_group(
+        self, market_id: str, groupId: str, remove: bool = False
+    ) -> JSONDict:
+        """Add or remove a group tag via POST /v0/market/[marketId]/group.
+
+        Args:
+            market_id: The market identifier.
+            groupId: The group identifier to toggle.
+            remove: Whether to remove the group assignment.
+
+        Returns:
+            JSONDict: Placeholder for the updated group assignment.
+
+        """
+        raise NotImplementedError()
+
+    def sell_shares(
+        self,
+        market_id: str,
+        outcome: Optional[str] = None,
+        shares: Optional[float] = None,
+        answerId: Optional[str] = None,
+    ) -> JSONDict:
+        """Sell shares via POST /v0/market/[marketId]/sell.
+
+        Args:
+            market_id: The market identifier.
+            outcome: Optional outcome label to sell.
+            shares: Optional share count.
+            answerId: Optional answer identifier for multi-choice markets.
+
+        Returns:
+            JSONDict: Placeholder for the resulting transaction.
+
+        """
+        raise NotImplementedError()
+
+    def list_managrams(
+        self,
+        toId: Optional[str] = None,
+        fromId: Optional[str] = None,
+        limit: Optional[int] = None,
+        before: Optional[str] = None,
+        after: Optional[str] = None,
+    ) -> List[JSONDict]:
+        """List managrams via GET /v0/managrams.
+
+        Args:
+            toId: Optional recipient identifier filter.
+            fromId: Optional sender identifier filter.
+            limit: Optional maximum number of rows.
+            before: Optional pagination cursor.
+            after: Optional pagination cursor.
+
+        Returns:
+            List[JSONDict]: Placeholder for the managram list.
+
+        """
+        raise NotImplementedError()
+
+    def send_managram(
+        self, toIds: Sequence[str], amount: int, message: Optional[str] = None
+    ) -> JSONDict:
+        """Send a managram via POST /v0/managram.
+
+        Args:
+            toIds: The recipient identifiers.
+            amount: The mana amount to send to each user.
+            message: Optional note to attach.
+
+        Returns:
+            JSONDict: Placeholder for the transaction payload.
+
+        """
+        raise NotImplementedError()
+
+    def get_leagues(
+        self,
+        userId: Optional[str] = None,
+        season: Optional[int] = None,
+        cohort: Optional[str] = None,
+    ) -> List[JSONDict]:
+        """Get league standings via GET /v0/leagues.
+
+        Args:
+            userId: Optional identifier to filter by user.
+            season: Optional season identifier.
+            cohort: Optional cohort slug.
+
+        Returns:
+            List[JSONDict]: Placeholder for the league standings.
+
+        """
+        raise NotImplementedError()
 
     @overload
     def create_comment(
