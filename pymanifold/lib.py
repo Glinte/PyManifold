@@ -1,14 +1,12 @@
 """Contains the client interface."""
 
-from typing import TYPE_CHECKING, Any, Dict, cast, overload
+from collections.abc import Iterable, Sequence
+from typing import Any, Dict, Literal, Optional, Union, cast, overload
 
 import requests
 
 from .types import Bet, Comment, Group, JSONDict, LiteMarket, LiteUser, Market
 from .utils.math import number_to_prob_cpmm1
-
-if TYPE_CHECKING:  # pragma: no cover
-    from typing import Iterable, List, Literal, Optional, Sequence, Union
 
 BASE_URI = "https://api.manifold.markets/v0"
 
@@ -20,34 +18,78 @@ class ManifoldClient:
         """Initialize a Manifold client, optionally with an API key."""
         self.api_key = api_key
 
-    # TODO: Expose the remaining filters supported by GET /v0/markets.
     def list_markets(
-        self, limit: Optional[int] = None, before: Optional[str] = None
-    ) -> List[LiteMarket]:
-        """List all markets."""
-        return list(self.get_markets(limit, before))
+        self,
+        limit: Optional[int] = None,
+        before: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: Optional[str] = None,
+        userId: Optional[str] = None,
+        groupId: Optional[str] = None,
+    ) -> list[LiteMarket]:
+        """List markets with optional filtering."""
 
-    # TODO: Expose the remaining filters supported by GET /v0/markets.
-    def get_markets(
-        self, limit: Optional[int] = None, before: Optional[str] = None
-    ) -> Iterable[LiteMarket]:
-        """Iterate over all markets."""
-        response = requests.get(
-            url=BASE_URI + "/markets", params={"limit": limit, "before": before}
+        return list(
+            self.get_markets(
+                limit=limit,
+                before=before,
+                sort=sort,
+                order=order,
+                userId=userId,
+                groupId=groupId,
+            )
         )
+
+    def get_markets(
+        self,
+        limit: Optional[int] = None,
+        before: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: Optional[str] = None,
+        userId: Optional[str] = None,
+        groupId: Optional[str] = None,
+    ) -> Iterable[LiteMarket]:
+        """Iterate over markets with optional filtering."""
+
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if before is not None:
+            params["before"] = before
+        if sort is not None:
+            params["sort"] = sort
+        if order is not None:
+            params["order"] = order
+        if userId is not None:
+            params["userId"] = userId
+        if groupId is not None:
+            params["groupId"] = groupId
+
+        response = requests.get(url=BASE_URI + "/markets", params=params)
         return (LiteMarket.from_dict(market) for market in response.json())
 
-    # TODO: Add the beforeTime filter supported by GET /v0/groups.
-    def list_groups(self, availableToUserId: Optional[str] = None) -> List[Group]:
-        """List all markets."""
-        return list(self.get_groups(availableToUserId))
+    def list_groups(
+        self,
+        availableToUserId: Optional[str] = None,
+        beforeTime: Optional[int] = None,
+    ) -> list[Group]:
+        """List all groups."""
 
-    # TODO: Add the beforeTime filter supported by GET /v0/groups.
-    def get_groups(self, availableToUserId: Optional[str] = None) -> Iterable[Group]:
-        """Iterate over all markets."""
-        response = requests.get(
-            url=BASE_URI + "/groups", params={"availableToUserId": availableToUserId}
-        )
+        return list(self.get_groups(availableToUserId, beforeTime))
+
+    def get_groups(
+        self,
+        availableToUserId: Optional[str] = None,
+        beforeTime: Optional[int] = None,
+    ) -> Iterable[Group]:
+        """Iterate over all groups."""
+
+        params: dict[str, Any] = {}
+        if availableToUserId is not None:
+            params["availableToUserId"] = availableToUserId
+        if beforeTime is not None:
+            params["beforeTime"] = beforeTime
+        response = requests.get(url=BASE_URI + "/groups", params=params)
         return (Group.from_dict(group) for group in response.json())
 
     def get_group(self, slug: Optional[str] = None, id_: Optional[str] = None) -> Group:
@@ -60,35 +102,93 @@ class ManifoldClient:
             raise ValueError("Requires one or more of (slug, id_)")
         return Group.from_dict(response.json())
 
-    # TODO: Support the full GET /v0/bets query parameters.
     def list_bets(
         self,
         limit: Optional[int] = None,
         before: Optional[str] = None,
         username: Optional[str] = None,
         market: Optional[str] = None,
-    ) -> List[Bet]:
-        """List all bets."""
-        return list(self.get_bets(limit, before, username, market))
+        userId: Optional[str] = None,
+        contractId: Optional[Union[str, Sequence[str]]] = None,
+        contractSlug: Optional[str] = None,
+        after: Optional[str] = None,
+        beforeTime: Optional[int] = None,
+        afterTime: Optional[int] = None,
+        kinds: Optional[Union[str, Sequence[str]]] = None,
+        order: Optional[str] = None,
+    ) -> list[Bet]:
+        """List bets with the available API filters."""
 
-    # TODO: Support the full GET /v0/bets query parameters.
+        return list(
+            self.get_bets(
+                limit=limit,
+                before=before,
+                username=username,
+                market=market,
+                userId=userId,
+                contractId=contractId,
+                contractSlug=contractSlug,
+                after=after,
+                beforeTime=beforeTime,
+                afterTime=afterTime,
+                kinds=kinds,
+                order=order,
+            )
+        )
+
     def get_bets(
         self,
         limit: Optional[int] = None,
         before: Optional[str] = None,
         username: Optional[str] = None,
         market: Optional[str] = None,
+        userId: Optional[str] = None,
+        contractId: Optional[Union[str, Sequence[str]]] = None,
+        contractSlug: Optional[str] = None,
+        after: Optional[str] = None,
+        beforeTime: Optional[int] = None,
+        afterTime: Optional[int] = None,
+        kinds: Optional[Union[str, Sequence[str]]] = None,
+        order: Optional[str] = None,
     ) -> Iterable[Bet]:
-        """Iterate over all bets."""
-        response = requests.get(
-            url=BASE_URI + "/bets",
-            params={
-                "limit": limit,
-                "before": before,
-                "username": username,
-                "market": market,
-            },
-        )
+        """Iterate over bets while exposing all documented filters."""
+
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if before is not None:
+            params["before"] = before
+        if username is not None:
+            params["username"] = username
+        if userId is not None:
+            params["userId"] = userId
+        if contractSlug is not None:
+            params["contractSlug"] = contractSlug
+        if after is not None:
+            params["after"] = after
+        if beforeTime is not None:
+            params["beforeTime"] = beforeTime
+        if afterTime is not None:
+            params["afterTime"] = afterTime
+        if order is not None:
+            params["order"] = order
+
+        contract_param: Optional[Union[str, Sequence[str]]] = contractId
+        if contract_param is None and market is not None:
+            contract_param = market
+        if contract_param is not None:
+            if isinstance(contract_param, str):
+                params["contractId"] = contract_param
+            else:
+                params["contractId"] = list(contract_param)
+
+        if kinds is not None:
+            if isinstance(kinds, str):
+                params["kinds"] = kinds
+            else:
+                params["kinds"] = ",".join(kinds)
+
+        response = requests.get(url=BASE_URI + "/bets", params=params)
         return (Bet.from_dict(market) for market in response.json())
 
     def get_market_by_id(self, market_id: str) -> Market:
@@ -174,14 +274,14 @@ class ManifoldClient:
         """
         raise NotImplementedError()
 
-    def get_user_bets_deprecated(self, username: str) -> List[Bet]:
+    def get_user_bets_deprecated(self, username: str) -> list[Bet]:
         """Get bets for a user via the deprecated /v0/user/[username]/bets endpoint.
 
         Args:
             username: The username whose bets should be retrieved.
 
         Returns:
-            List[Bet]: Placeholder for the bet list returned by the legacy endpoint.
+            list[Bet]: Placeholder for the bet list returned by the legacy endpoint.
 
         """
         raise NotImplementedError()
@@ -198,7 +298,7 @@ class ManifoldClient:
         """
         raise NotImplementedError()
 
-    def get_user_portfolio_history(self, user_id: str, period: str) -> List[JSONDict]:
+    def get_user_portfolio_history(self, user_id: str, period: str) -> list[JSONDict]:
         """Get historical portfolio metrics for the given user.
 
         Args:
@@ -206,19 +306,19 @@ class ManifoldClient:
             period: The history bucket to request.
 
         Returns:
-            List[JSONDict]: Placeholder for the historical portfolio data.
+            list[JSONDict]: Placeholder for the historical portfolio data.
 
         """
         raise NotImplementedError()
 
-    def get_group_markets_by_id(self, group_id: str) -> List[LiteMarket]:
+    def get_group_markets_by_id(self, group_id: str) -> list[LiteMarket]:
         """Get markets associated with a group via /v0/group/by-id/[id]/markets.
 
         Args:
             group_id: The group identifier from the API response.
 
         Returns:
-            List[LiteMarket]: Placeholder for the group market list.
+            list[LiteMarket]: Placeholder for the group market list.
 
         """
         raise NotImplementedError()
@@ -234,7 +334,7 @@ class ManifoldClient:
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         liquidity: Optional[float] = None,
-    ) -> List[LiteMarket]:
+    ) -> list[LiteMarket]:
         """Search or filter markets via GET /v0/search-markets.
 
         Args:
@@ -249,7 +349,7 @@ class ManifoldClient:
             liquidity: Optional minimum liquidity threshold.
 
         Returns:
-            List[LiteMarket]: Placeholder for the matching markets.
+            list[LiteMarket]: Placeholder for the matching markets.
 
         """
         raise NotImplementedError()
@@ -286,7 +386,7 @@ class ManifoldClient:
         bottom: Optional[int] = None,
         userId: Optional[str] = None,
         answerId: Optional[str] = None,
-    ) -> List[JSONDict]:
+    ) -> list[JSONDict]:
         """Get position data for a market via GET /v0/market/[marketId]/positions.
 
         Args:
@@ -298,7 +398,7 @@ class ManifoldClient:
             answerId: Optional answer identifier for multi-choice markets.
 
         Returns:
-            List[JSONDict]: Placeholder for the position summaries.
+            list[JSONDict]: Placeholder for the position summaries.
 
         """
         raise NotImplementedError()
@@ -328,7 +428,7 @@ class ManifoldClient:
 
     def list_users(
         self, limit: Optional[int] = None, before: Optional[str] = None
-    ) -> List[LiteUser]:
+    ) -> list[LiteUser]:
         """List users via GET /v0/users.
 
         Args:
@@ -336,7 +436,7 @@ class ManifoldClient:
             before: Optional paging cursor.
 
         Returns:
-            List[LiteUser]: Placeholder for the returned users.
+            list[LiteUser]: Placeholder for the returned users.
 
         """
         raise NotImplementedError()
@@ -363,13 +463,15 @@ class ManifoldClient:
         response.raise_for_status()
         return response
 
-    # TODO: Support expiresAt, expiresMillisAfter, dryRun, and return the Bet payload.
     def create_bet(
         self,
         contractId: str,
         amount: int,
         outcome: str,
         limitProb: Optional[float] = None,
+        expiresAt: Optional[int] = None,
+        expiresMillisAfter: Optional[int] = None,
+        dryRun: Optional[bool] = None,
     ) -> str:
         """Place a bet.
 
@@ -382,6 +484,12 @@ class ManifoldClient:
         }
         if limitProb is not None:
             json["limitProb"] = limitProb
+        if expiresAt is not None:
+            json["expiresAt"] = expiresAt
+        if expiresMillisAfter is not None:
+            json["expiresMillisAfter"] = expiresMillisAfter
+        if dryRun is not None:
+            json["dryRun"] = dryRun
         response = requests.post(
             url=BASE_URI + "/bet",
             json=json,
@@ -395,7 +503,7 @@ class ManifoldClient:
         question: str,
         description: str,
         closeTime: int,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
     ) -> LiteMarket:
         """Create a free response market."""
         return self._create_market(
@@ -407,8 +515,8 @@ class ManifoldClient:
         question: str,
         description: str,
         closeTime: int,
-        answers: List[str],
-        tags: Optional[List[str]] = None,
+        answers: list[str],
+        tags: Optional[list[str]] = None,
     ) -> LiteMarket:
         """Create a free response market."""
         return self._create_market(
@@ -424,7 +532,7 @@ class ManifoldClient:
         maxValue: int,
         isLogScale: bool,
         initialValue: Optional[float] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
     ) -> LiteMarket:
         """Create a numeric market."""
         return self._create_market(
@@ -444,7 +552,7 @@ class ManifoldClient:
         question: str,
         description: str,
         closeTime: int,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         initialProb: Optional[int] = 50,
     ) -> LiteMarket:
         """Create a binary market."""
@@ -459,7 +567,7 @@ class ManifoldClient:
         question: str,
         description: str,
         closeTime: int,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         initialProb: Optional[int] = 50,
         initialValue: Optional[float] = None,
         minValue: Optional[int] = None,
@@ -601,7 +709,7 @@ class ManifoldClient:
         page: Optional[int] = None,
         userId: Optional[str] = None,
         order: Optional[str] = None,
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """Get comments via GET /v0/comments.
 
         Args:
@@ -613,7 +721,7 @@ class ManifoldClient:
             order: Optional order specifier.
 
         Returns:
-            List[Comment]: Placeholder for the comment list.
+            list[Comment]: Placeholder for the comment list.
 
         """
         raise NotImplementedError()
@@ -765,20 +873,20 @@ class ManifoldClient:
         toId: Optional[str] = None,
         fromId: Optional[str] = None,
         limit: Optional[int] = None,
-        before: Optional[str] = None,
-        after: Optional[str] = None,
-    ) -> List[JSONDict]:
+        before: Optional[int] = None,
+        after: Optional[int] = None,
+    ) -> list[JSONDict]:
         """List managrams via GET /v0/managrams.
 
         Args:
             toId: Optional recipient identifier filter.
             fromId: Optional sender identifier filter.
             limit: Optional maximum number of rows.
-            before: Optional pagination cursor.
-            after: Optional pagination cursor.
+            before: Optional createdTime upper bound.
+            after: Optional createdTime lower bound.
 
         Returns:
-            List[JSONDict]: Placeholder for the managram list.
+            list[JSONDict]: Placeholder for the managram list.
 
         """
         raise NotImplementedError()
@@ -804,7 +912,7 @@ class ManifoldClient:
         userId: Optional[str] = None,
         season: Optional[int] = None,
         cohort: Optional[str] = None,
-    ) -> List[JSONDict]:
+    ) -> list[JSONDict]:
         """Get league standings via GET /v0/leagues.
 
         Args:
@@ -813,7 +921,7 @@ class ManifoldClient:
             cohort: Optional cohort slug.
 
         Returns:
-            List[JSONDict]: Placeholder for the league standings.
+            list[JSONDict]: Placeholder for the league standings.
 
         """
         raise NotImplementedError()
