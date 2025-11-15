@@ -10,7 +10,7 @@ from .utils.math import number_to_prob_cpmm1
 if TYPE_CHECKING:  # pragma: no cover
     from typing import Iterable, List, Literal, Optional, Sequence, Union
 
-BASE_URI = "https://manifold.markets/api/v0"
+BASE_URI = "https://api.manifold.markets/v0"
 
 
 class ManifoldClient:
