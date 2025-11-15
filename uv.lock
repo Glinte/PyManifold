@@ -19,6 +19,15 @@ wheels = [
 ]
 
 [[package]]
+name = "beartype"
+version = "0.22.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/09/9003e5662691056e0e8b2e6f57c799e71875fac0be0e785d8cb11557cd2a/beartype-0.22.5.tar.gz", hash = "sha256:516a9096cc77103c96153474fa35c3ebcd9d36bd2ec8d0e3a43307ced0fa6341", size = 1586256, upload-time = "2025-11-01T05:49:20.771Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f7/f6/073d19f7b571c08327fbba3f8e011578da67ab62a11f98911274ff80653f/beartype-0.22.5-py3-none-any.whl", hash = "sha256:d9743dd7cd6d193696eaa1e025f8a70fb09761c154675679ff236e61952dfba0", size = 1321700, upload-time = "2025-11-01T05:49:18.436Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2025.11.12"
 source = { registry = "https://pypi.org/simple" }
@@ -91,6 +100,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "deal"
+version = "4.24.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/a0/5563ace6f8d1ccb5d869ae745c157796c4d3744435615ca2ae58461b99bf/deal-4.24.5.tar.gz", hash = "sha256:81a98d532b5225e429dcab543316b8aee6b7327051e10ca9299ba9ea90464b28", size = 723784, upload-time = "2025-03-02T09:46:44.394Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/06/bda68d484f3a1efeacf3ed8fab6d87d2b34005acadeaaff5f196c160ee81/deal-4.24.5-py3-none-any.whl", hash = "sha256:5f630456cecb518f968bdba01c6c6bebaa42a8422cd08b7c122413ab9c37c2ce", size = 206963, upload-time = "2025-03-02T09:46:41.301Z" },
 ]
 
 [[package]]
@@ -414,6 +432,8 @@ name = "pymanifold"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "beartype" },
+    { name = "deal" },
     { name = "numpy" },
     { name = "requests" },
     { name = "vcrpy" },
@@ -429,6 +449,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beartype", specifier = ">=0.22.5" },
+    { name = "deal", specifier = ">=4.24.5" },
     { name = "numpy", specifier = ">=1.23.1" },
     { name = "requests", specifier = ">=2.28.0" },
     { name = "vcrpy", specifier = ">=4.1.1" },
