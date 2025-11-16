@@ -1,9 +1,10 @@
 """Contains the client interface."""
 
 from collections.abc import Iterable, Sequence
-from typing import Any, Dict, Literal, Optional, Union, cast, overload
+from types import TracebackType
+from typing import Any, Literal, Optional, Union, cast, overload
 
-import requests
+import aiohttp
 
 from .types import Bet, Comment, Group, JSONDict, LiteMarket, LiteUser, Market
 from .utils.math import number_to_prob_cpmm1
@@ -14,11 +15,83 @@ BASE_URI = "https://api.manifold.markets/v0"
 class ManifoldClient:
     """A client for interacting with the website manifold.markets."""
 
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize a Manifold client, optionally with an API key."""
-        self.api_key = api_key
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        session: Optional[aiohttp.ClientSession] = None,
+    ):
+        """Initialize a Manifold client, optionally with an API key.
 
-    def list_markets(
+        Args:
+            api_key: The Manifold Markets API key for authenticated requests.
+            session: An optional aiohttp ClientSession to use for requests. If not provided, a new session will be created.
+              This session must have auto_decompress enabled to handle gzip responses.
+        """
+        self.api_key = api_key
+        self._session = session
+        self._owns_session = session is None
+
+    async def __aenter__(self) -> "ManifoldClient":
+        """Create the internal session when used as an async context manager."""
+
+        await self.connect()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Close the internal session when exiting a context manager."""
+
+        await self.close()
+
+    async def connect(self) -> None:
+        """Ensure the HTTP session exists."""
+
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+
+    async def close(self) -> None:
+        """Close the HTTP session if it was created by the client."""
+
+        if self._session is not None and self._owns_session:
+            await self._session.close()
+        self._session = None
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        """Return the currently active HTTP session."""
+
+        if self._session is None:
+            raise RuntimeError(
+                "Client session is not initialized. Use 'async with' or call 'connect' before making requests."
+            )
+        return self._session
+
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[dict[str, Any]] = None,
+        json_data: Optional[JSONDict] = None,
+        auth: bool = False,
+    ) -> Any:
+        """Send an HTTP request and parse its JSON payload."""
+
+        session = self._get_session()
+        headers = self._auth_headers() if auth else None
+        async with session.request(
+            method=method,
+            url=BASE_URI + path,
+            params=params,
+            json=json_data,
+            headers=headers,
+        ) as response:
+            return await response.json()
+
+    async def list_markets(
         self,
         limit: Optional[int] = None,
         before: Optional[str] = None,
@@ -29,18 +102,17 @@ class ManifoldClient:
     ) -> list[LiteMarket]:
         """List markets with optional filtering."""
 
-        return list(
-            self.get_markets(
-                limit=limit,
-                before=before,
-                sort=sort,
-                order=order,
-                userId=userId,
-                groupId=groupId,
-            )
+        markets = await self.get_markets(
+            limit=limit,
+            before=before,
+            sort=sort,
+            order=order,
+            userId=userId,
+            groupId=groupId,
         )
+        return list(markets)
 
-    def get_markets(
+    async def get_markets(
         self,
         limit: Optional[int] = None,
         before: Optional[str] = None,
@@ -65,19 +137,22 @@ class ManifoldClient:
         if groupId is not None:
             params["groupId"] = groupId
 
-        response = requests.get(url=BASE_URI + "/markets", params=params)
-        return (LiteMarket.from_dict(market) for market in response.json())
+        markets_raw = cast(
+            list[JSONDict], await self._request_json("GET", "/markets", params=params)
+        )
+        return (LiteMarket.from_dict(market) for market in markets_raw)
 
-    def list_groups(
+    async def list_groups(
         self,
         availableToUserId: Optional[str] = None,
         beforeTime: Optional[int] = None,
     ) -> list[Group]:
         """List all groups."""
 
-        return list(self.get_groups(availableToUserId, beforeTime))
+        groups = await self.get_groups(availableToUserId, beforeTime)
+        return list(groups)
 
-    def get_groups(
+    async def get_groups(
         self,
         availableToUserId: Optional[str] = None,
         beforeTime: Optional[int] = None,
@@ -89,20 +164,24 @@ class ManifoldClient:
             params["availableToUserId"] = availableToUserId
         if beforeTime is not None:
             params["beforeTime"] = beforeTime
-        response = requests.get(url=BASE_URI + "/groups", params=params)
-        return (Group.from_dict(group) for group in response.json())
+        groups_raw = cast(
+            list[JSONDict], await self._request_json("GET", "/groups", params=params)
+        )
+        return (Group.from_dict(group) for group in groups_raw)
 
-    def get_group(self, slug: Optional[str] = None, id_: Optional[str] = None) -> Group:
+    async def get_group(
+        self, slug: Optional[str] = None, id_: Optional[str] = None
+    ) -> Group:
         """Iterate over all markets."""
         if id_ is not None:
-            response = requests.get(url=BASE_URI + "/group/by-id/" + id_)
+            group_raw = await self._request_json("GET", "/group/by-id/" + id_)
         elif slug is not None:
-            response = requests.get(url=BASE_URI + "/group/" + slug)
+            group_raw = await self._request_json("GET", "/group/" + slug)
         else:
             raise ValueError("Requires one or more of (slug, id_)")
-        return Group.from_dict(response.json())
+        return Group.from_dict(cast(JSONDict, group_raw))
 
-    def list_bets(
+    async def list_bets(
         self,
         limit: Optional[int] = None,
         before: Optional[str] = None,
@@ -119,29 +198,27 @@ class ManifoldClient:
     ) -> list[Bet]:
         """List bets with the available API filters."""
 
-        return list(
-            self.get_bets(
-                limit=limit,
-                before=before,
-                username=username,
-                market=market,
-                userId=userId,
-                contractId=contractId,
-                contractSlug=contractSlug,
-                after=after,
-                beforeTime=beforeTime,
-                afterTime=afterTime,
-                kinds=kinds,
-                order=order,
-            )
+        bets = await self.get_bets(
+            limit=limit,
+            before=before,
+            username=username,
+            market=market,
+            userId=userId,
+            contractId=contractId,
+            contractSlug=contractSlug,
+            after=after,
+            beforeTime=beforeTime,
+            afterTime=afterTime,
+            kinds=kinds,
+            order=order,
         )
+        return list(bets)
 
-    def get_bets(
+    async def get_bets(
         self,
         limit: Optional[int] = None,
         before: Optional[str] = None,
         username: Optional[str] = None,
-        market: Optional[str] = None,
         userId: Optional[str] = None,
         contractId: Optional[Union[str, Sequence[str]]] = None,
         contractSlug: Optional[str] = None,
@@ -173,14 +250,11 @@ class ManifoldClient:
         if order is not None:
             params["order"] = order
 
-        contract_param: Optional[Union[str, Sequence[str]]] = contractId
-        if contract_param is None and market is not None:
-            contract_param = market
-        if contract_param is not None:
-            if isinstance(contract_param, str):
-                params["contractId"] = contract_param
+        if contractId is not None:
+            if isinstance(contractId, str):
+                params["contractId"] = contractId
             else:
-                params["contractId"] = list(contract_param)
+                params["contractId"] = list(contractId)
 
         if kinds is not None:
             if isinstance(kinds, str):
@@ -188,44 +262,46 @@ class ManifoldClient:
             else:
                 params["kinds"] = ",".join(kinds)
 
-        response = requests.get(url=BASE_URI + "/bets", params=params)
-        return (Bet.from_dict(market) for market in response.json())
+        bets_raw = cast(
+            list[JSONDict], await self._request_json("GET", "/bets", params=params)
+        )
+        return (Bet.from_dict(market) for market in bets_raw)
 
-    def get_market_by_id(self, market_id: str) -> Market:
+    async def get_market_by_id(self, market_id: str) -> Market:
         """Get a market by id."""
-        return Market.from_dict(self._get_market_by_id_raw(market_id))
+        return Market.from_dict(await self._get_market_by_id_raw(market_id))
 
-    def _get_market_by_id_raw(self, market_id: str) -> JSONDict:
+    async def _get_market_by_id_raw(self, market_id: str) -> JSONDict:
         """Get a market by id."""
-        response = requests.get(url=BASE_URI + "/market/" + market_id)
-        return cast(JSONDict, response.json())
+        data = await self._request_json("GET", "/market/" + market_id)
+        return cast(JSONDict, data)
 
-    def get_market_by_slug(self, slug: str) -> Market:
+    async def get_market_by_slug(self, slug: str) -> Market:
         """Get a market by slug."""
-        return Market.from_dict(self._get_market_by_slug_raw(slug))
+        return Market.from_dict(await self._get_market_by_slug_raw(slug))
 
-    def _get_market_by_slug_raw(self, slug: str) -> JSONDict:
+    async def _get_market_by_slug_raw(self, slug: str) -> JSONDict:
         """Get a market by slug."""
-        response = requests.get(url=BASE_URI + "/slug/" + slug)
-        return cast(JSONDict, response.json())
+        data = await self._request_json("GET", "/slug/" + slug)
+        return cast(JSONDict, data)
 
-    def get_market_by_url(self, url: str) -> Market:
+    async def get_market_by_url(self, url: str) -> Market:
         """Get a market by url."""
-        return Market.from_dict(self._get_market_by_url_raw(url))
+        return Market.from_dict(await self._get_market_by_url_raw(url))
 
-    def _get_market_by_url_raw(self, url: str) -> JSONDict:
+    async def _get_market_by_url_raw(self, url: str) -> JSONDict:
         """Get a market by url."""
         slug = url.split("/")[-1].split("#")[0]
-        response = requests.get(url=BASE_URI + "/slug/" + slug)
-        return cast(JSONDict, response.json())
+        data = await self._request_json("GET", "/slug/" + slug)
+        return cast(JSONDict, data)
 
-    def get_user(self, handle: str) -> LiteUser:
+    async def get_user(self, handle: str) -> LiteUser:
         """Get a user by handle."""
-        return LiteUser.from_dict(self._get_user_raw(handle))
+        return LiteUser.from_dict(await self._get_user_raw(handle))
 
-    def _get_user_raw(self, handle: str) -> JSONDict:
-        response = requests.get(url=BASE_URI + "/user/" + handle)
-        return cast(JSONDict, response.json())
+    async def _get_user_raw(self, handle: str) -> JSONDict:
+        data = await self._request_json("GET", "/user/" + handle)
+        return cast(JSONDict, data)
 
     # FIXME: Add a DisplayUser dataclass for lite user responses.
     def get_user_lite(self, handle: str) -> Any:
@@ -447,23 +523,21 @@ class ManifoldClient:
         else:
             raise RuntimeError("No API key provided")
 
-    def cancel_market(self, market: Union[LiteMarket, str]) -> requests.Response:
+    async def cancel_market(self, market: Union[LiteMarket, str]) -> JSONDict:
         """Cancel a market, resolving it N/A."""
         if isinstance(market, LiteMarket):
             marketId = market.id
         else:
             marketId = market
-        response = requests.post(
-            url=BASE_URI + "/market/" + marketId + "/resolve",
-            json={
-                "outcome": "CANCEL",
-            },
-            headers=self._auth_headers(),
+        data = await self._request_json(
+            "POST",
+            f"/market/{marketId}/resolve",
+            json_data={"outcome": "CANCEL"},
+            auth=True,
         )
-        response.raise_for_status()
-        return response
+        return cast(JSONDict, data)
 
-    def create_bet(
+    async def create_bet(
         self,
         contractId: str,
         amount: int,
@@ -490,15 +564,10 @@ class ManifoldClient:
             json["expiresMillisAfter"] = expiresMillisAfter
         if dryRun is not None:
             json["dryRun"] = dryRun
-        response = requests.post(
-            url=BASE_URI + "/bet",
-            json=json,
-            headers=self._auth_headers(),
-        )
-        response.raise_for_status()
-        return cast(str, response.json()["betId"])
+        data = await self._request_json("POST", "/bet", json_data=json, auth=True)
+        return cast(str, data["betId"])
 
-    def create_free_response_market(
+    async def create_free_response_market(
         self,
         question: str,
         description: str,
@@ -506,11 +575,11 @@ class ManifoldClient:
         tags: Optional[list[str]] = None,
     ) -> LiteMarket:
         """Create a free response market."""
-        return self._create_market(
+        return await self._create_market(
             "FREE_RESPONSE", question, description, closeTime, tags
         )
 
-    def create_multiple_choice_market(
+    async def create_multiple_choice_market(
         self,
         question: str,
         description: str,
@@ -519,11 +588,11 @@ class ManifoldClient:
         tags: Optional[list[str]] = None,
     ) -> LiteMarket:
         """Create a free response market."""
-        return self._create_market(
+        return await self._create_market(
             "MULTIPLE_CHOICE", question, description, closeTime, tags, answers=answers
         )
 
-    def create_numeric_market(
+    async def create_numeric_market(
         self,
         question: str,
         description: str,
@@ -535,7 +604,7 @@ class ManifoldClient:
         tags: Optional[list[str]] = None,
     ) -> LiteMarket:
         """Create a numeric market."""
-        return self._create_market(
+        return await self._create_market(
             "PSEUDO_NUMERIC",
             question,
             description,
@@ -547,7 +616,7 @@ class ManifoldClient:
             initialValue=initialValue,
         )
 
-    def create_binary_market(
+    async def create_binary_market(
         self,
         question: str,
         description: str,
@@ -556,12 +625,12 @@ class ManifoldClient:
         initialProb: Optional[int] = 50,
     ) -> LiteMarket:
         """Create a binary market."""
-        return self._create_market(
+        return await self._create_market(
             "BINARY", question, description, closeTime, tags, initialProb=initialProb
         )
 
     # TODO: Support the expanded POST /v0/market payload (visibility, groups, etc.).
-    def _create_market(
+    async def _create_market(
         self,
         outcomeType: str,
         question: str,
@@ -601,80 +670,80 @@ class ManifoldClient:
                 "Invalid outcome type. Outcome should be one of: BINARY, FREE_RESPONSE, PSEUDO_NUMERIC, MULTIPLE_CHOICE"
             )
 
-        response = requests.post(
-            url=BASE_URI + "/market",
-            json=data,
-            headers=self._auth_headers(),
-        )
-        if response.status_code in range(400, 500):
-            response.raise_for_status()
-        elif response.status_code >= 500:
-            # Sometimes when there is a serverside error the market is still posted
-            # We want to make sure we still return it in those instances
-            for mkt in self.list_markets():
-                if (question, outcomeType, closeTime) == (
-                    mkt.question,
-                    mkt.outcomeType,
-                    mkt.closeTime,
-                ):
-                    return mkt
-        return LiteMarket.from_dict(response.json())
+        try:
+            market_raw = cast(
+                JSONDict,
+                await self._request_json("POST", "/market", json_data=data, auth=True),
+            )
+        except aiohttp.ClientResponseError as error:
+            if error.status >= 500:
+                # Sometimes when there is a serverside error the market is still posted
+                # We want to make sure we still return it in those instances
+                for mkt in await self.list_markets():
+                    if (question, outcomeType, closeTime) == (
+                        mkt.question,
+                        mkt.outcomeType,
+                        mkt.closeTime,
+                    ):
+                        return mkt
+            raise
+        return LiteMarket.from_dict(market_raw)
 
-    def resolve_market(
+    async def resolve_market(
         self, market: Union[LiteMarket, str], *args: Any, **kwargs: Any
-    ) -> requests.Response:
+    ) -> JSONDict:
         """Resolve a market, with different inputs depending on its type."""
         if not isinstance(market, LiteMarket):
-            market = self.get_market_by_id(market)
+            market = await self.get_market_by_id(market)
         if market.outcomeType == "BINARY":
-            return self._resolve_binary_market(market, *args, **kwargs)
+            return await self._resolve_binary_market(market, *args, **kwargs)
         elif market.outcomeType == "FREE_RESPONSE":
-            return self._resolve_free_response_market(market, *args, **kwargs)
+            return await self._resolve_free_response_market(market, *args, **kwargs)
         elif market.outcomeType == "MULTIPLE_CHOICE":
-            return self._resolve_multiple_choice_market(market, *args, **kwargs)
+            return await self._resolve_multiple_choice_market(market, *args, **kwargs)
         elif market.outcomeType == "PSEUDO_NUMERIC":
-            return self._resolve_pseudo_numeric_market(market, *args, **kwargs)
+            return await self._resolve_pseudo_numeric_market(market, *args, **kwargs)
         else:  # pragma: no cover
             raise NotImplementedError()
 
-    def _resolve_binary_market(
+    async def _resolve_binary_market(
         self, market: LiteMarket, probabilityInt: float
-    ) -> requests.Response:
+    ) -> JSONDict:
         if probabilityInt == 100 or probabilityInt is True:
-            json: Dict[str, Union[float, str]] = {"outcome": "YES"}
+            json: dict[str, float | str] = {"outcome": "YES"}
         elif probabilityInt == 0 or probabilityInt is False:
             json = {"outcome": "NO"}
         else:
             json = {"outcome": "MKT", "probabilityInt": probabilityInt}
 
-        response = requests.post(
-            url=BASE_URI + "/market/" + market.id + "/resolve",
-            json=json,
-            headers=self._auth_headers(),
+        data = await self._request_json(
+            "POST",
+            f"/market/{market.id}/resolve",
+            json_data=json,
+            auth=True,
         )
-        response.raise_for_status()
-        return response
+        return cast(JSONDict, data)
 
-    def _resolve_pseudo_numeric_market(
+    async def _resolve_pseudo_numeric_market(
         self, market: LiteMarket, resolutionValue: float
-    ) -> requests.Response:
+    ) -> JSONDict:
         assert market.min is not None
         assert market.max is not None
         prob = 100 * number_to_prob_cpmm1(
             resolutionValue, market.min, market.max, bool(market.isLogScale)
         )
         json = {"outcome": "MKT", "value": resolutionValue, "probabilityInt": prob}
-        response = requests.post(
-            url=BASE_URI + "/market/" + market.id + "/resolve",
-            json=json,
-            headers=self._auth_headers(),
+        data = await self._request_json(
+            "POST",
+            f"/market/{market.id}/resolve",
+            json_data=json,
+            auth=True,
         )
-        response.raise_for_status()
-        return response
+        return cast(JSONDict, data)
 
-    def _resolve_free_response_market(
-        self, market: LiteMarket, weights: Dict[int, float]
-    ) -> requests.Response:
+    async def _resolve_free_response_market(
+        self, market: LiteMarket, weights: dict[int, float]
+    ) -> JSONDict:
         if len(weights) == 1:
             json: JSONDict = {"outcome": next(iter(weights))}
         else:
@@ -686,19 +755,19 @@ class ManifoldClient:
                     for index, weight in weights.items()
                 ],
             }
-        response = requests.post(
-            url=BASE_URI + "/market/" + market.id + "/resolve",
-            json=json,
-            headers=self._auth_headers(),
+        data = await self._request_json(
+            "POST",
+            f"/market/{market.id}/resolve",
+            json_data=json,
+            auth=True,
         )
-        response.raise_for_status()
-        return response
+        return cast(JSONDict, data)
 
     _resolve_multiple_choice_market = _resolve_free_response_market
 
-    def _resolve_numeric_market(
+    async def _resolve_numeric_market(
         self, market: LiteMarket, number: float
-    ) -> requests.Response:
+    ) -> JSONDict:
         raise NotImplementedError("TODO: I suspect the relevant docs are out of date")
 
     def get_market_comments(
@@ -749,14 +818,14 @@ class ManifoldClient:
         """
         raise NotImplementedError()
 
-    def cancel_bet(self, bet_id: str) -> requests.Response:
+    def cancel_bet(self, bet_id: str) -> JSONDict:
         """Cancel a limit order via POST /v0/bet/cancel/[id].
 
         Args:
             bet_id: The identifier of the bet to cancel.
 
         Returns:
-            requests.Response: Placeholder for the cancellation response.
+            JSONDict: Placeholder for the cancellation response.
 
         """
         raise NotImplementedError()
@@ -929,16 +998,16 @@ class ManifoldClient:
     @overload
     def create_comment(
         self, market: LiteMarket | str, comment: str, mode: Literal["markdown", "html"]
-    ) -> requests.Response: ...
+    ) -> JSONDict: ...
 
     @overload
     def create_comment(
         self, market: LiteMarket | str, comment: JSONDict, mode: Literal["tiptap"]
-    ) -> requests.Response: ...
+    ) -> JSONDict: ...
 
-    def create_comment(
+    async def create_comment(
         self, market: LiteMarket | str, comment: str | JSONDict, mode: str
-    ) -> requests.Response:
+    ) -> JSONDict:
         """Create a comment on a given market, using Markdown, HTML, or TipTap formatting."""
         if isinstance(market, LiteMarket):
             market = market.id
@@ -951,10 +1020,7 @@ class ManifoldClient:
             data["markdown"] = comment
         else:
             raise ValueError("Invalid format mode")
-        response = requests.post(
-            url=BASE_URI + "/comment",
-            json=data,
-            headers=self._auth_headers(),
+        response = await self._request_json(
+            "POST", "/comment", json_data=data, auth=True
         )
-        response.raise_for_status()
-        return response
+        return cast(JSONDict, response)
