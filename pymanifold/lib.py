@@ -1,5 +1,7 @@
 """Contains the client interface."""
 
+import gzip
+import json
 from collections.abc import Iterable, Sequence
 from types import TracebackType
 from typing import Any, Literal, Optional, Union, cast, overload
@@ -18,7 +20,7 @@ from .types import (
 )
 from .utils.math import number_to_prob_cpmm1
 
-BASE_URI = "https://api.manifold.markets/v0"
+BASE_URI = "https://manifold.markets/api/v0"
 
 
 class ManifoldClient:
@@ -98,7 +100,14 @@ class ManifoldClient:
             json=json_data,
             headers=headers,
         ) as response:
-            return await response.json()
+            payload = await response.read()
+            if not payload:
+                return None
+            if response.headers.get("Content-Encoding") == "gzip":
+                payload = gzip.decompress(payload)
+            encoding = response.charset or "utf-8"
+            text = payload.decode(encoding)
+            return json.loads(text)
 
     async def list_markets(
         self,
@@ -228,6 +237,7 @@ class ManifoldClient:
         limit: Optional[int] = None,
         before: Optional[str] = None,
         username: Optional[str] = None,
+        market: Optional[str] = None,
         userId: Optional[str] = None,
         contractId: Optional[Union[str, Sequence[str]]] = None,
         contractSlug: Optional[str] = None,
@@ -246,6 +256,8 @@ class ManifoldClient:
             params["before"] = before
         if username is not None:
             params["username"] = username
+        if market is not None:
+            params["market"] = market
         if userId is not None:
             params["userId"] = userId
         if contractSlug is not None:
