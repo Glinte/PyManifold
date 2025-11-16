@@ -1,14 +1,36 @@
 from os import getenv
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping
+
+import asyncio
+from collections.abc import Coroutine, Mapping
+from typing import Any, Callable, TypeVar
 
 from markdown import markdown
 from pymanifold import ManifoldClient, __version__
-from pymanifold.types import Group, Market
+from pymanifold.types import Bet, Group, JSONDict, LiteMarket, LiteUser, Market
 from vcr import VCR
 
-if TYPE_CHECKING:  # pragma: no cover
-    from pymanifold.types import Bet, JSONDict, LiteMarket, LiteUser
+T = TypeVar("T")
+
+
+def run_async(coro: Coroutine[Any, Any, T]) -> T:
+    """Execute a coroutine in a dedicated event loop for pytest compatibility."""
+
+    return asyncio.run(coro)
+
+
+ClientTest = Callable[[ManifoldClient], Coroutine[Any, Any, None]]
+
+
+def run_client_test(func: ClientTest, *, api_key: str | None = None) -> None:
+    """Run a client-aware coroutine within an async context manager."""
+
+    async def _runner() -> None:
+        async with ManifoldClient(api_key=api_key) as client:
+            await func(client)
+
+    run_async(_runner())
+
 
 API_KEY = getenv("MANIFOLD_API_KEY", "fake_api_key")
 LOCAL_FOLDER = str(Path(__file__).parent)
@@ -150,227 +172,276 @@ def test_version() -> None:
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_list_markets() -> None:
-    client = ManifoldClient()
-    markets = client.list_markets()
+    async def _run(client: ManifoldClient) -> None:
+        markets = await client.list_markets()
 
-    for m in markets:
-        validate_lite_market(m)
+        for market in markets:
+            validate_lite_market(market)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_markets() -> None:
-    client = ManifoldClient()
-    markets = client.get_markets()
+    async def _run(client: ManifoldClient) -> None:
+        markets = await client.get_markets()
 
-    for m in markets:
-        validate_lite_market(m)
+        for market in markets:
+            validate_lite_market(market)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_list_groups() -> None:
-    client = ManifoldClient()
-    groups = client.list_groups()
+    async def _run(client: ManifoldClient) -> None:
+        groups = await client.list_groups()
 
-    for g in groups:
-        validate_group(g)
+        for group in groups:
+            await validate_group(group, client)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_groups() -> None:
-    client = ManifoldClient()
-    groups = client.get_groups()
+    async def _run(client: ManifoldClient) -> None:
+        groups = await client.get_groups()
 
-    for idx, g in enumerate(groups):
-        validate_group(g)
-        if idx < 50:  # for the sake of time
-            validate_group(client.get_group(slug=g.slug))
-            validate_group(client.get_group(id_=g.id))
+        for idx, group in enumerate(groups):
+            await validate_group(group, client)
+            if idx < 50:  # for the sake of time
+                await validate_group(await client.get_group(slug=group.slug), client)
+                await validate_group(await client.get_group(id_=group.id), client)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_user() -> None:
-    client = ManifoldClient()
-    for username in ["v", "LivInTheLookingGlass"]:
-        user = client.get_user(username)
-        validate_lite_user(user)
+    async def _run(client: ManifoldClient) -> None:
+        for username in ["v", "LivInTheLookingGlass"]:
+            user = await client.get_user(username)
+            validate_lite_user(user)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_list_bets() -> None:
-    client = ManifoldClient()
-    limit = 45
-    for kwargs in get_bet_params:
-        key = "-".join(kwargs) or "none"
-        with manifold_vcr.use_cassette(f"test_list_bet/{key}.yaml"):
-            bets = client.list_bets(limit=limit, **kwargs)
+    async def _run(client: ManifoldClient) -> None:
+        limit = 45
+        for kwargs in get_bet_params:
+            key = "-".join(kwargs) or "none"
+            with manifold_vcr.use_cassette(f"test_list_bet/{key}.yaml"):
+                bets = await client.list_bets(limit=limit, **kwargs)
 
-            for idx, b in enumerate(bets):
-                assert idx < limit
-                validate_bet(b)
+                for idx, bet in enumerate(bets):
+                    assert idx < limit
+                    validate_bet(bet)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_bets() -> None:
-    client = ManifoldClient()
-    limit = 45
-    for kwargs in get_bet_params:
-        key = "-".join(kwargs) or "none"
-        with manifold_vcr.use_cassette(f"test_get_bet/{key}.yaml"):
-            bets = client.get_bets(limit=limit, **kwargs)
+    async def _run(client: ManifoldClient) -> None:
+        limit = 45
+        for kwargs in get_bet_params:
+            key = "-".join(kwargs) or "none"
+            with manifold_vcr.use_cassette(f"test_get_bet/{key}.yaml"):
+                bets = await client.get_bets(limit=limit, **kwargs)
 
-            for idx, b in enumerate(bets):
-                assert idx < limit
-                validate_bet(b)
+                for idx, bet in enumerate(bets):
+                    assert idx < limit
+                    validate_bet(bet)
+
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_market_by_url() -> None:
-    client = ManifoldClient()
+    async def _run(client: ManifoldClient) -> None:
+        slug = "will-bitcoins-price-fall-below-25k"
+        url = "https://manifold.markets/bcongdon/" + slug
+        market = await client.get_market_by_url(url)
+        assert market.slug == slug
+        assert market.id == "rIR6mWqaO9xKLifr6cLL"
+        assert market.url == url
+        validate_market(market)
 
-    slug = "will-bitcoins-price-fall-below-25k"
-    url = "https://manifold.markets/bcongdon/" + slug
-    market = client.get_market_by_url(url)
-    assert market.slug == slug
-    assert market.id == "rIR6mWqaO9xKLifr6cLL"
-    assert market.url == url
-    validate_market(market)
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_market_by_slug() -> None:
-    client = ManifoldClient()
+    async def _run(client: ManifoldClient) -> None:
+        slug = "will-bitcoins-price-fall-below-25k"
+        market = await client.get_market_by_slug(slug)
+        assert market.slug == slug
+        assert market.id == "rIR6mWqaO9xKLifr6cLL"
+        assert market.url == "https://manifold.markets/bcongdon/" + slug
+        validate_market(market)
 
-    slug = "will-bitcoins-price-fall-below-25k"
-    market = client.get_market_by_slug("will-bitcoins-price-fall-below-25k")
-    assert market.slug == slug
-    assert market.id == "rIR6mWqaO9xKLifr6cLL"
-    assert market.url == "https://manifold.markets/bcongdon/" + slug
-    validate_market(market)
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_get_market_by_id() -> None:
-    client = ManifoldClient()
+    async def _run(client: ManifoldClient) -> None:
+        market_id = "rIR6mWqaO9xKLifr6cLL"
+        market = await client.get_market_by_id(market_id)
+        assert market.slug == "will-bitcoins-price-fall-below-25k"
+        assert market.id == market_id
+        assert (
+            market.url
+            == "https://manifold.markets/bcongdon/will-bitcoins-price-fall-below-25k"
+        )
+        assert len(market.bets) == 49
+        assert len(market.comments) == 5
+        validate_market(market)
 
-    id = "rIR6mWqaO9xKLifr6cLL"
-    market = client.get_market_by_id(id)
-    assert market.slug == "will-bitcoins-price-fall-below-25k"
-    assert market.id == id
-    assert (
-        market.url
-        == "https://manifold.markets/bcongdon/will-bitcoins-price-fall-below-25k"
-    )
-    assert len(market.bets) == 49
-    assert len(market.comments) == 5
-    validate_market(market)
+    run_client_test(_run)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_comment() -> None:
     contract = "fobho6eQKxn4YhITF1a8"
-    client = ManifoldClient(api_key=API_KEY)
 
-    client.create_comment(market=contract, mode="markdown", comment=markdown_comment)
-    client.create_comment(market=contract, mode="html", comment=html_comment)
-    client.create_comment(market=contract, mode="tiptap", comment=tiptap_comment)
+    async def _run(client: ManifoldClient) -> None:
+        await client.create_comment(
+            market=contract, mode="markdown", comment=markdown_comment
+        )
+        await client.create_comment(market=contract, mode="html", comment=html_comment)
+        await client.create_comment(
+            market=contract, mode="tiptap", comment=tiptap_comment
+        )
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_bet_binary() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    betId = client.create_bet(contractId="BxFQCoaaxBqRcnzJb1mV", amount=1, outcome="NO")
-    assert betId == "ZhwL5DngCKdrZ7TQQFad"
+    async def _run(client: ManifoldClient) -> None:
+        bet_id = await client.create_bet(
+            contractId="BxFQCoaaxBqRcnzJb1mV", amount=1, outcome="NO"
+        )
+        assert bet_id == "ZhwL5DngCKdrZ7TQQFad"
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_bet_free_response() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    betId = client.create_bet(contractId="Hbeirep6H6GXHFNiX6M1", amount=1, outcome="4")
-    assert betId == "8qgMoiHYfQlvkuyd3NRa"
+    async def _run(client: ManifoldClient) -> None:
+        bet_id = await client.create_bet(
+            contractId="Hbeirep6H6GXHFNiX6M1", amount=1, outcome="4"
+        )
+        assert bet_id == "8qgMoiHYfQlvkuyd3NRa"
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_market_binary() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    market = client.create_binary_market(
-        question="Testing Binary Market creation through API",
-        initialProb=99,
-        description="Going to resolves as N/A",
-        tags=["fun"],
-        closeTime=4102444800000,
-    )
-    validate_lite_market(market)
+    async def _run(client: ManifoldClient) -> None:
+        market = await client.create_binary_market(
+            question="Testing Binary Market creation through API",
+            initialProb=99,
+            description="Going to resolves as N/A",
+            tags=["fun"],
+            closeTime=4102444800000,
+        )
+        validate_lite_market(market)
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_market_free_response() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    market = client.create_free_response_market(
-        question="Testing Free Response Market creation through API",
-        description="Going to resolves as N/A",
-        tags=["fun"],
-        closeTime=4102444800000,
-    )
-    validate_lite_market(market)
+    async def _run(client: ManifoldClient) -> None:
+        market = await client.create_free_response_market(
+            question="Testing Free Response Market creation through API",
+            description="Going to resolves as N/A",
+            tags=["fun"],
+            closeTime=4102444800000,
+        )
+        validate_lite_market(market)
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_market_multiple_choice() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    market = client.create_multiple_choice_market(
-        question="Testing Multiple Choice creation through API",
-        description="Going to resolves as N/A",
-        tags=["fun"],
-        closeTime=5102444800000,
-        answers=["sounds good", "alright", "I don't care"],
-    )
-    validate_lite_market(market)
+    async def _run(client: ManifoldClient) -> None:
+        market = await client.create_multiple_choice_market(
+            question="Testing Multiple Choice creation through API",
+            description="Going to resolves as N/A",
+            tags=["fun"],
+            closeTime=5102444800000,
+            answers=["sounds good", "alright", "I don't care"],
+        )
+        validate_lite_market(market)
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_create_market_numeric() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    market = client.create_numeric_market(
-        question="Testing Numeric Response Market creation through API",
-        minValue=0,
-        maxValue=100,
-        isLogScale=False,
-        initialValue=50,
-        description="Going to resolves as N/A",
-        tags=["fun"],
-        closeTime=5102444800000,
-    )
-    validate_lite_market(market)
+    async def _run(client: ManifoldClient) -> None:
+        market = await client.create_numeric_market(
+            question="Testing Numeric Response Market creation through API",
+            minValue=0,
+            maxValue=100,
+            isLogScale=False,
+            initialValue=50,
+            description="Going to resolves as N/A",
+            tags=["fun"],
+            closeTime=5102444800000,
+        )
+        validate_lite_market(market)
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_resolve_market_binary() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    client.resolve_market("l6jsJPhOWSztXtzqhpU7", 100)
+    async def _run(client: ManifoldClient) -> None:
+        await client.resolve_market("l6jsJPhOWSztXtzqhpU7", 100)
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_resolve_market_free_resonse() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    client.resolve_market("qjwjSMWj1s8Hr21hVbPC", {1: 50, 3: 50})
+    async def _run(client: ManifoldClient) -> None:
+        await client.resolve_market("qjwjSMWj1s8Hr21hVbPC", {1: 50, 3: 50})
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_resolve_market_multiple_choice() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    client.resolve_market("TEW8dlA3pxk3GalxeQkI", {0: 50, 2: 50})
+    async def _run(client: ManifoldClient) -> None:
+        await client.resolve_market("TEW8dlA3pxk3GalxeQkI", {0: 50, 2: 50})
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_resolve_market_pseudo_numeric() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    client.resolve_market("MIVgHSvQ1s9MRGpm9QUb", 2045)
+    async def _run(client: ManifoldClient) -> None:
+        await client.resolve_market("MIVgHSvQ1s9MRGpm9QUb", 2045)
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 @manifold_vcr.use_cassette()  # type: ignore
 def test_cancel_market() -> None:
-    client = ManifoldClient(api_key=API_KEY)
-    client.cancel_market("H8Dc6yCj4TkvJfoOitYr")
+    async def _run(client: ManifoldClient) -> None:
+        await client.cancel_market("H8Dc6yCj4TkvJfoOitYr")
+
+    run_client_test(_run, api_key=API_KEY)
 
 
 def validate_lite_market(market: LiteMarket) -> None:
@@ -458,7 +529,7 @@ def validate_lite_user(user: LiteUser) -> None:
     )
 
 
-def validate_group(group: Group) -> None:
+async def validate_group(group: Group, client: ManifoldClient | None = None) -> None:
     assert group.name
     assert group.creatorId
     assert group.id
@@ -467,10 +538,21 @@ def validate_group(group: Group) -> None:
     assert group.createdTime
     assert group.slug
 
-    client = ManifoldClient()
+    if client is None:
+        async with ManifoldClient() as managed_client:
+            contracts = await group.contracts(managed_client)
+            for contract in contracts:
+                validate_market(contract)
 
-    for contract in group.contracts(client):
+            members = await group.members(managed_client)
+            for member in members:
+                validate_lite_user(member)
+        return
+
+    contracts = await group.contracts(client)
+    for contract in contracts:
         validate_market(contract)
 
-    for member in group.members(client):
+    members = await group.members(client)
+    for member in members:
         validate_lite_user(member)

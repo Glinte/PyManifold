@@ -1,6 +1,6 @@
 """Contains the various types of data that Manifold can return."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from inspect import signature
 from typing import TYPE_CHECKING, Literal, Type, TypeVar, cast
@@ -230,6 +230,12 @@ class User(DictDeserializable):
     totalDeposits: float = 0.0
     """Total lifetime deposits."""
 
+    totalPnLCached: float | None = None
+    """Cached total profit and loss value."""
+
+    creatorVolumeCached: float | None = None
+    """Cached creator trade volume."""
+
     lastBetTime: int | None = None
     """Millisecond timestamp of the last bet."""
 
@@ -293,6 +299,9 @@ class LiteMarket(DictDeserializable):
 
     creatorAvatarUrl: str | None = None
     """Avatar of the creator."""
+
+    description: str = ""
+    """Plain text description of the market."""
 
     createdTime: int = 0
     """Millisecond timestamp describing when the market was created."""
@@ -534,29 +543,29 @@ class Group(DictDeserializable):
     about: str = ""
     """Description of the group."""
 
-    def contracts(self, client: "ManifoldClient") -> Iterable["Market"]:
-        """Iterate over the markets in this group.
+    async def contracts(self, client: "ManifoldClient") -> list["Market"]:
+        """Fetch all markets associated with this group.
 
         Args:
             client: Client used to fetch the markets.
 
         Returns:
-            Iterable over the group's markets.
+            list[Market]: All markets belonging to the group.
         """
 
-        return (client.get_market_by_id(id_) for id_ in self.contractIds)
+        return [await client.get_market_by_id(id_) for id_ in self.contractIds]
 
-    def members(self, client: "ManifoldClient") -> Iterable["User"]:
-        """Iterate over the members in this group.
+    async def members(self, client: "ManifoldClient") -> list["User"]:
+        """Fetch all members associated with this group.
 
         Args:
             client: Client used to fetch members.
 
         Returns:
-            Iterable over the group's members.
+            list[User]: All users belonging to the group.
         """
 
-        return (client.get_user(id_) for id_ in self.memberIds)
+        return [await client.get_user(id_) for id_ in self.memberIds]
 
 
 @dataclass
