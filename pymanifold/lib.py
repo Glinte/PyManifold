@@ -278,39 +278,24 @@ class ManifoldClient:
 
     async def get_market_by_id(self, market_id: str) -> Market:
         """Get a market by id."""
-        return Market.from_dict(await self._get_market_by_id_raw(market_id))
-
-    async def _get_market_by_id_raw(self, market_id: str) -> JSONDict:
-        """Get a market by id."""
         data = await self._request_json("GET", "/market/" + market_id)
-        return cast(JSONDict, data)
+        return Market.from_dict(cast(JSONDict, data))
 
     async def get_market_by_slug(self, slug: str) -> Market:
         """Get a market by slug."""
-        return Market.from_dict(await self._get_market_by_slug_raw(slug))
-
-    async def _get_market_by_slug_raw(self, slug: str) -> JSONDict:
-        """Get a market by slug."""
         data = await self._request_json("GET", "/slug/" + slug)
-        return cast(JSONDict, data)
+        return Market.from_dict(cast(JSONDict, data))
 
     async def get_market_by_url(self, url: str) -> Market:
         """Get a market by url."""
-        return Market.from_dict(await self._get_market_by_url_raw(url))
-
-    async def _get_market_by_url_raw(self, url: str) -> JSONDict:
-        """Get a market by url."""
         slug = url.split("/")[-1].split("#")[0]
         data = await self._request_json("GET", "/slug/" + slug)
-        return cast(JSONDict, data)
+        return Market.from_dict(cast(JSONDict, data))
 
     async def get_user(self, handle: str) -> LiteUser:
         """Get a user by handle."""
-        return LiteUser.from_dict(await self._get_user_raw(handle))
-
-    async def _get_user_raw(self, handle: str) -> JSONDict:
         data = await self._request_json("GET", "/user/" + handle)
-        return cast(JSONDict, data)
+        return LiteUser.from_dict(cast(JSONDict, data))
 
     def get_user_lite(self, handle: str) -> DisplayUser:
         """Get basic public information for a user by username.
