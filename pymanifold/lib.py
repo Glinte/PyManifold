@@ -998,7 +998,10 @@ class ManifoldClient:
     ) -> JSONDict: ...
 
     async def create_comment(
-        self, market: LiteMarket | str, comment: str | JSONDict, mode: str
+        self,
+        market: LiteMarket | str,
+        comment: str | JSONDict,
+        mode: Literal["markdown", "html", "tiptap"],
     ) -> JSONDict:
         """Create a comment on a given market, using Markdown, HTML, or TipTap formatting."""
         if isinstance(market, LiteMarket):
