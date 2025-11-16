@@ -6,7 +6,16 @@ from typing import Any, Literal, Optional, Union, cast, overload
 
 import aiohttp
 
-from .types import Bet, Comment, Group, JSONDict, LiteMarket, LiteUser, Market
+from .types import (
+    Bet,
+    Comment,
+    Group,
+    JSONDict,
+    LiteMarket,
+    LiteUser,
+    Market,
+    DisplayUser,
+)
 from .utils.math import number_to_prob_cpmm1
 
 BASE_URI = "https://api.manifold.markets/v0"
@@ -303,15 +312,14 @@ class ManifoldClient:
         data = await self._request_json("GET", "/user/" + handle)
         return cast(JSONDict, data)
 
-    # FIXME: Add a DisplayUser dataclass for lite user responses.
-    def get_user_lite(self, handle: str) -> Any:
+    def get_user_lite(self, handle: str) -> DisplayUser:
         """Get basic public information for a user by username.
 
         Args:
             handle: The username to look up.
 
         Returns:
-            Any: Placeholder for the DisplayUser payload.
+            DisplayUser: Placeholder for the DisplayUser payload.
 
         """
         raise NotImplementedError()
@@ -328,15 +336,14 @@ class ManifoldClient:
         """
         raise NotImplementedError()
 
-    # FIXME: Add a DisplayUser dataclass for lite user responses.
-    def get_user_by_id_lite(self, user_id: str) -> Any:
+    def get_user_by_id_lite(self, user_id: str) -> DisplayUser:
         """Get basic public information for a user by ID.
 
         Args:
             user_id: The user identifier to look up.
 
         Returns:
-            Any: Placeholder for the DisplayUser payload.
+            DisplayUser: Placeholder for the DisplayUser payload.
 
         """
         raise NotImplementedError()

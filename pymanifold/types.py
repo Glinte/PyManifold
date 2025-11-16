@@ -150,6 +150,30 @@ class Comment(DictDeserializable):
 
 
 @dataclass
+class DisplayUser(DictDeserializable):
+    """Basic display information about a user.
+
+    Attributes:
+        id: Unique identifier of the user.
+        name: Display name of the user.
+        username: Username used in URLs.
+        avatarUrl: Avatar of the user.
+    """
+
+    id: str
+    """Unique identifier of the user."""
+
+    name: str
+    """Display name of the user. May include spaces."""
+
+    username: str
+    """Username used in URLs."""
+
+    avatarUrl: str | None = None
+    """Avatar of the user."""
+
+
+@dataclass
 class User(DictDeserializable):
     """Basic information about a user.
 
