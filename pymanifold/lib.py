@@ -688,17 +688,17 @@ class ManifoldClient:
         if not isinstance(market, LiteMarket):
             market = await self.get_market_by_id(market)
         if market.outcomeType == "BINARY":
-            return await self._resolve_binary_market(market, *args, **kwargs)
+            return await self.resolve_binary_market(market, *args, **kwargs)
         elif market.outcomeType == "FREE_RESPONSE":
-            return await self._resolve_free_response_market(market, *args, **kwargs)
+            return await self.resolve_free_response_market(market, *args, **kwargs)
         elif market.outcomeType == "MULTIPLE_CHOICE":
-            return await self._resolve_multiple_choice_market(market, *args, **kwargs)
+            return await self.resolve_multiple_choice_market(market, *args, **kwargs)
         elif market.outcomeType == "PSEUDO_NUMERIC":
-            return await self._resolve_pseudo_numeric_market(market, *args, **kwargs)
+            return await self.resolve_pseudo_numeric_market(market, *args, **kwargs)
         else:  # pragma: no cover
             raise NotImplementedError()
 
-    async def _resolve_binary_market(
+    async def resolve_binary_market(
         self, market: LiteMarket, probabilityInt: float
     ) -> JSONDict:
         if probabilityInt == 100 or probabilityInt is True:
@@ -716,7 +716,7 @@ class ManifoldClient:
         )
         return cast(JSONDict, data)
 
-    async def _resolve_pseudo_numeric_market(
+    async def resolve_pseudo_numeric_market(
         self, market: LiteMarket, resolutionValue: float
     ) -> JSONDict:
         assert market.min is not None
@@ -733,7 +733,7 @@ class ManifoldClient:
         )
         return cast(JSONDict, data)
 
-    async def _resolve_free_response_market(
+    async def resolve_free_response_market(
         self, market: LiteMarket, weights: dict[int, float]
     ) -> JSONDict:
         if len(weights) == 1:
@@ -755,9 +755,9 @@ class ManifoldClient:
         )
         return cast(JSONDict, data)
 
-    _resolve_multiple_choice_market = _resolve_free_response_market
+    resolve_multiple_choice_market = resolve_free_response_market
 
-    async def _resolve_numeric_market(
+    async def resolve_numeric_market(
         self, market: LiteMarket, number: float
     ) -> JSONDict:
         raise NotImplementedError("TODO: I suspect the relevant docs are out of date")
