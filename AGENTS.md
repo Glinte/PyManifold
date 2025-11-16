@@ -35,15 +35,6 @@ Additionally, for module-level constants, include a brief description right afte
 ### Using a new environmental variable
 When using a new environmental variable, add it to `.env.example` with a placeholder value, and optionally a comment describing its purpose. Also add it to the `Environment Variables` section in `README.md`.
 
-## Testing Guidelines
-Tests are required for all new features and bug fixes. Tests should be written using `pytest`. Even if the user does not explicitly request tests, you must add them.
-
-Allowed pytest markers:
-- builtin ones like `skip`, `xfail`, `parametrize`, etc.
-
-### Running Tests
-Use `uv run pytest ...` instead of simply `pytest ...` so that the virtual environment is activated for you.
-
 ## GitHub Actions & CI/CD
 - When adding or changing GitHub Actions, always search online for the newest version and use the commit hash instead of version tags for security and immutability. (Use `gh` CLI to find the commit hash, searching won't give you helpful results.)
 
