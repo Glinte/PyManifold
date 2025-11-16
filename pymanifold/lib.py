@@ -1,5 +1,7 @@
 """Contains the client interface."""
 
+import gzip
+import json
 from collections.abc import Iterable, Sequence
 from types import TracebackType
 from typing import Any, Literal, Optional, Union, cast, overload
@@ -18,7 +20,7 @@ from .types import (
 )
 from .utils.math import number_to_prob_cpmm1
 
-BASE_URI = "https://api.manifold.markets/v0"
+BASE_URI = "https://manifold.markets/api/v0"
 
 
 class ManifoldClient:
@@ -98,7 +100,14 @@ class ManifoldClient:
             json=json_data,
             headers=headers,
         ) as response:
-            return await response.json()
+            payload = await response.read()
+            if not payload:
+                return None
+            if response.headers.get("Content-Encoding") == "gzip":
+                payload = gzip.decompress(payload)
+            encoding = response.charset or "utf-8"
+            text = payload.decode(encoding)
+            return json.loads(text)
 
     async def list_markets(
         self,
@@ -228,6 +237,7 @@ class ManifoldClient:
         limit: Optional[int] = None,
         before: Optional[str] = None,
         username: Optional[str] = None,
+        market: Optional[str] = None,
         userId: Optional[str] = None,
         contractId: Optional[Union[str, Sequence[str]]] = None,
         contractSlug: Optional[str] = None,
@@ -246,6 +256,8 @@ class ManifoldClient:
             params["before"] = before
         if username is not None:
             params["username"] = username
+        if market is not None:
+            params["market"] = market
         if userId is not None:
             params["userId"] = userId
         if contractSlug is not None:
@@ -297,76 +309,87 @@ class ManifoldClient:
         data = await self._request_json("GET", "/user/" + handle)
         return LiteUser.from_dict(cast(JSONDict, data))
 
-    def get_user_lite(self, handle: str) -> DisplayUser:
+    async def get_user_lite(self, handle: str) -> DisplayUser:
         """Get basic public information for a user by username.
 
         Args:
             handle: The username to look up.
 
         Returns:
-            DisplayUser: Placeholder for the DisplayUser payload.
-
+            DisplayUser: The profile summary for the requested user.
         """
-        raise NotImplementedError()
 
-    def get_user_by_id(self, user_id: str) -> LiteUser:
+        data = await self._request_json("GET", f"/user/{handle}/lite")
+        return DisplayUser.from_dict(cast(JSONDict, data))
+
+    async def get_user_by_id(self, user_id: str) -> LiteUser:
         """Get a user by ID.
 
         Args:
             user_id: The unique identifier to fetch.
 
         Returns:
-            LiteUser: Placeholder for the /v0/user/by-id response.
-
+            LiteUser: Details about the requested account.
         """
-        raise NotImplementedError()
 
-    def get_user_by_id_lite(self, user_id: str) -> DisplayUser:
+        data = await self._request_json("GET", f"/user/by-id/{user_id}")
+        return LiteUser.from_dict(cast(JSONDict, data))
+
+    async def get_user_by_id_lite(self, user_id: str) -> DisplayUser:
         """Get basic public information for a user by ID.
 
         Args:
             user_id: The user identifier to look up.
 
         Returns:
-            DisplayUser: Placeholder for the DisplayUser payload.
-
+            DisplayUser: The profile summary for the requested user.
         """
-        raise NotImplementedError()
 
-    def get_authenticated_user(self) -> LiteUser:
+        data = await self._request_json("GET", f"/user/by-id/{user_id}/lite")
+        return DisplayUser.from_dict(cast(JSONDict, data))
+
+    async def get_authenticated_user(self) -> LiteUser:
         """Return the authenticated user profile.
 
         Returns:
-            LiteUser: Placeholder for the authenticated user payload.
-
+            LiteUser: Details about the user associated with the API key.
         """
-        raise NotImplementedError()
 
-    def get_user_bets_deprecated(self, username: str) -> list[Bet]:
+        data = await self._request_json("GET", "/me", auth=True)
+        return LiteUser.from_dict(cast(JSONDict, data))
+
+    async def get_user_bets_deprecated(self, username: str) -> list[Bet]:
         """Get bets for a user via the deprecated /v0/user/[username]/bets endpoint.
 
         Args:
             username: The username whose bets should be retrieved.
 
         Returns:
-            list[Bet]: Placeholder for the bet list returned by the legacy endpoint.
-
+            list[Bet]: Bets previously placed by the requested user.
         """
-        raise NotImplementedError()
 
-    def get_user_portfolio(self, user_id: str) -> JSONDict:
+        bets_raw = cast(
+            list[JSONDict], await self._request_json("GET", f"/user/{username}/bets")
+        )
+        return [Bet.from_dict(bet) for bet in bets_raw]
+
+    async def get_user_portfolio(self, user_id: str) -> JSONDict:
         """Get live portfolio metrics for the given user.
 
         Args:
             user_id: The identifier of the user.
 
         Returns:
-            JSONDict: Placeholder for the live portfolio metrics response.
-
+            JSONDict: Live portfolio metrics for the given account.
         """
-        raise NotImplementedError()
 
-    def get_user_portfolio_history(self, user_id: str, period: str) -> list[JSONDict]:
+        params = {"userId": user_id}
+        data = await self._request_json("GET", "/get-user-portfolio", params=params)
+        return cast(JSONDict, data)
+
+    async def get_user_portfolio_history(
+        self, user_id: str, period: str
+    ) -> list[JSONDict]:
         """Get historical portfolio metrics for the given user.
 
         Args:
@@ -374,24 +397,30 @@ class ManifoldClient:
             period: The history bucket to request.
 
         Returns:
-            list[JSONDict]: Placeholder for the historical portfolio data.
-
+            list[JSONDict]: Historical metrics snapshots for the user.
         """
-        raise NotImplementedError()
 
-    def get_group_markets_by_id(self, group_id: str) -> list[LiteMarket]:
+        params = {"userId": user_id, "period": period}
+        data = await self._request_json(
+            "GET", "/get-user-portfolio-history", params=params
+        )
+        return cast(list[JSONDict], data)
+
+    async def get_group_markets_by_id(self, group_id: str) -> list[LiteMarket]:
         """Get markets associated with a group via /v0/group/by-id/[id]/markets.
 
         Args:
             group_id: The group identifier from the API response.
 
         Returns:
-            list[LiteMarket]: Placeholder for the group market list.
-
+            list[LiteMarket]: Markets that belong to the specified group.
         """
-        raise NotImplementedError()
 
-    def search_markets(
+        data = await self._request_json("GET", f"/group/by-id/{group_id}/markets")
+        markets_raw = cast(list[JSONDict], data)
+        return [LiteMarket.from_dict(market) for market in markets_raw]
+
+    async def search_markets(
         self,
         term: str,
         sort: Optional[str] = None,
@@ -417,36 +446,68 @@ class ManifoldClient:
             liquidity: Optional minimum liquidity threshold.
 
         Returns:
-            list[LiteMarket]: Placeholder for the matching markets.
-
+            list[LiteMarket]: Markets that match the filter criteria.
         """
-        raise NotImplementedError()
 
-    def get_market_probability(self, market_id: str) -> JSONDict:
+        params: dict[str, Any] = {"term": term}
+        if sort is not None:
+            params["sort"] = sort
+        if filter_ is not None:
+            params["filter"] = filter_
+        if contractType is not None:
+            params["contractType"] = contractType
+        if topicSlug is not None:
+            params["topicSlug"] = topicSlug
+        if creatorId is not None:
+            params["creatorId"] = creatorId
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        if liquidity is not None:
+            params["liquidity"] = liquidity
+
+        data = await self._request_json("GET", "/search-markets", params=params)
+        markets_raw = cast(list[JSONDict], data)
+        return [LiteMarket.from_dict(market) for market in markets_raw]
+
+    async def get_market_probability(self, market_id: str) -> JSONDict:
         """Get cached probability data for a single market.
 
         Args:
             market_id: The market identifier.
 
         Returns:
-            JSONDict: Placeholder for the probability payload.
-
+            JSONDict: The cached probability snapshot.
         """
-        raise NotImplementedError()
 
-    def get_market_probabilities(self, market_ids: Sequence[str]) -> JSONDict:
+        data = await self._request_json("GET", f"/market/{market_id}/prob")
+        return cast(JSONDict, data)
+
+    async def get_market_probabilities(self, market_ids: Sequence[str]) -> JSONDict:
         """Get cached probability data for multiple markets.
 
         Args:
             market_ids: The contract identifiers to query.
 
         Returns:
-            JSONDict: Placeholder for the probability batch response.
+            JSONDict: Cached probabilities keyed by contract identifier.
 
+        Raises:
+            ValueError: If no market identifiers are provided.
         """
-        raise NotImplementedError()
 
-    def get_market_positions(
+        ids = list(market_ids)
+        if not ids:
+            raise ValueError("Requires at least one market identifier")
+        if len(ids) == 1:
+            probability = await self.get_market_probability(ids[0])
+            return {ids[0]: probability}
+        params: list[tuple[str, str]] = [("ids", market_id) for market_id in ids]
+        data = await self._request_json("GET", "/market-probs", params=params)
+        return cast(JSONDict, data)
+
+    async def get_market_positions(
         self,
         market_id: str,
         order: Optional[str] = None,
@@ -466,12 +527,26 @@ class ManifoldClient:
             answerId: Optional answer identifier for multi-choice markets.
 
         Returns:
-            list[JSONDict]: Placeholder for the position summaries.
-
+            list[JSONDict]: Position summaries for the requested market.
         """
-        raise NotImplementedError()
 
-    def get_user_contract_metrics_with_contracts(
+        params: dict[str, Any] = {}
+        if order is not None:
+            params["order"] = order
+        if top is not None:
+            params["top"] = top
+        if bottom is not None:
+            params["bottom"] = bottom
+        if userId is not None:
+            params["userId"] = userId
+        if answerId is not None:
+            params["answerId"] = answerId
+        data = await self._request_json(
+            "GET", f"/market/{market_id}/positions", params=params
+        )
+        return cast(list[JSONDict], data)
+
+    async def get_user_contract_metrics_with_contracts(
         self,
         user_id: str,
         limit: int,
@@ -489,12 +564,22 @@ class ManifoldClient:
             perAnswer: Whether to return per-answer metrics.
 
         Returns:
-            JSONDict: Placeholder for the metrics-with-contracts payload.
-
+            JSONDict: Contract metrics grouped by market, plus the market data.
         """
-        raise NotImplementedError()
 
-    def list_users(
+        params: dict[str, Any] = {"userId": user_id, "limit": limit}
+        if offset is not None:
+            params["offset"] = offset
+        if order is not None:
+            params["order"] = order
+        if perAnswer is not None:
+            params["perAnswer"] = perAnswer
+        data = await self._request_json(
+            "GET", "/get-user-contract-metrics-with-contracts", params=params
+        )
+        return cast(JSONDict, data)
+
+    async def list_users(
         self, limit: Optional[int] = None, before: Optional[str] = None
     ) -> list[LiteUser]:
         """List users via GET /v0/users.
@@ -504,10 +589,17 @@ class ManifoldClient:
             before: Optional paging cursor.
 
         Returns:
-            list[LiteUser]: Placeholder for the returned users.
-
+            list[LiteUser]: Users returned by the API.
         """
-        raise NotImplementedError()
+
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if before is not None:
+            params["before"] = before
+        data = await self._request_json("GET", "/users", params=params or None)
+        users_raw = cast(list[JSONDict], data)
+        return [LiteUser.from_dict(user) for user in users_raw]
 
     def _auth_headers(self) -> dict[str, str]:
         if self.api_key:
@@ -760,9 +852,11 @@ class ManifoldClient:
     async def resolve_numeric_market(
         self, market: LiteMarket, number: float
     ) -> JSONDict:
-        raise NotImplementedError("TODO: I suspect the relevant docs are out of date")
+        """Resolve a numeric market by mapping to pseudo numeric mechanics."""
 
-    def get_market_comments(
+        return await self.resolve_pseudo_numeric_market(market, number)
+
+    async def get_market_comments(
         self,
         contractId: Optional[str] = None,
         contractSlug: Optional[str] = None,
@@ -782,12 +876,27 @@ class ManifoldClient:
             order: Optional order specifier.
 
         Returns:
-            list[Comment]: Placeholder for the comment list.
-
+            list[Comment]: Comments that match the supplied filters.
         """
-        raise NotImplementedError()
 
-    def create_multi_bet(
+        params: dict[str, Any] = {}
+        if contractId is not None:
+            params["contractId"] = contractId
+        if contractSlug is not None:
+            params["contractSlug"] = contractSlug
+        if limit is not None:
+            params["limit"] = limit
+        if page is not None:
+            params["page"] = page
+        if userId is not None:
+            params["userId"] = userId
+        if order is not None:
+            params["order"] = order
+        data = await self._request_json("GET", "/comments", params=params or None)
+        comments_raw = cast(list[JSONDict], data)
+        return [Comment.from_dict(comment) for comment in comments_raw]
+
+    async def create_multi_bet(
         self,
         contractId: str,
         answerIds: Sequence[str],
@@ -805,24 +914,35 @@ class ManifoldClient:
             expiresAt: Optional cancellation timestamp.
 
         Returns:
-            JSONDict: Placeholder for the created order payload.
-
+            JSONDict: The created bet payload from the API.
         """
-        raise NotImplementedError()
 
-    def cancel_bet(self, bet_id: str) -> JSONDict:
+        json: JSONDict = {
+            "contractId": contractId,
+            "answerIds": list(answerIds),
+            "amount": amount,
+        }
+        if limitProb is not None:
+            json["limitProb"] = limitProb
+        if expiresAt is not None:
+            json["expiresAt"] = expiresAt
+        data = await self._request_json("POST", "/multi-bet", json_data=json, auth=True)
+        return cast(JSONDict, data)
+
+    async def cancel_bet(self, bet_id: str) -> JSONDict:
         """Cancel a limit order via POST /v0/bet/cancel/[id].
 
         Args:
             bet_id: The identifier of the bet to cancel.
 
         Returns:
-            JSONDict: Placeholder for the cancellation response.
-
+            JSONDict: The cancellation response from the API.
         """
-        raise NotImplementedError()
 
-    def add_market_answer(self, market_id: str, text: str) -> JSONDict:
+        data = await self._request_json("POST", f"/bet/cancel/{bet_id}", auth=True)
+        return cast(JSONDict, data)
+
+    async def add_market_answer(self, market_id: str, text: str) -> JSONDict:
         """Add an answer to a market via POST /v0/market/[marketId]/answer.
 
         Args:
@@ -830,12 +950,16 @@ class ManifoldClient:
             text: The answer text.
 
         Returns:
-            JSONDict: Placeholder for the new answer payload.
-
+            JSONDict: Details about the created answer.
         """
-        raise NotImplementedError()
 
-    def add_market_liquidity(self, market_id: str, amount: int) -> JSONDict:
+        json = {"text": text}
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/answer", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def add_market_liquidity(self, market_id: str, amount: int) -> JSONDict:
         """Add liquidity via POST /v0/market/[marketId]/add-liquidity.
 
         Args:
@@ -843,12 +967,16 @@ class ManifoldClient:
             amount: The mana amount to add.
 
         Returns:
-            JSONDict: Placeholder for the liquidity transaction.
-
+            JSONDict: Details about the liquidity addition.
         """
-        raise NotImplementedError()
 
-    def add_market_bounty(self, market_id: str, amount: int) -> JSONDict:
+        json = {"amount": amount}
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/add-liquidity", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def add_market_bounty(self, market_id: str, amount: int) -> JSONDict:
         """Add bounty funds via POST /v0/market/[marketId]/add-bounty.
 
         Args:
@@ -856,12 +984,16 @@ class ManifoldClient:
             amount: The additional bounty amount.
 
         Returns:
-            JSONDict: Placeholder for the bounty transaction.
-
+            JSONDict: Details about the bounty deposit.
         """
-        raise NotImplementedError()
 
-    def award_market_bounty(
+        json = {"amount": amount}
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/add-bounty", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def award_market_bounty(
         self, market_id: str, amount: int, commentId: str
     ) -> JSONDict:
         """Award a bounty via POST /v0/market/[marketId]/award-bounty.
@@ -872,12 +1004,16 @@ class ManifoldClient:
             commentId: The comment receiving the reward.
 
         Returns:
-            JSONDict: Placeholder for the resulting transaction.
-
+            JSONDict: Details about the bounty payout.
         """
-        raise NotImplementedError()
 
-    def close_market_early(
+        json = {"amount": amount, "commentId": commentId}
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/award-bounty", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def close_market_early(
         self, market_id: str, closeTime: Optional[int] = None
     ) -> JSONDict:
         """Close a market via POST /v0/market/[marketId]/close.
@@ -887,12 +1023,18 @@ class ManifoldClient:
             closeTime: Optional timestamp at which to close.
 
         Returns:
-            JSONDict: Placeholder for the closure payload.
-
+            JSONDict: Details about the updated close time.
         """
-        raise NotImplementedError()
 
-    def update_market_group(
+        json: Optional[JSONDict] = None
+        if closeTime is not None:
+            json = {"closeTime": closeTime}
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/close", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def update_market_group(
         self, market_id: str, groupId: str, remove: bool = False
     ) -> JSONDict:
         """Add or remove a group tag via POST /v0/market/[marketId]/group.
@@ -903,12 +1045,16 @@ class ManifoldClient:
             remove: Whether to remove the group assignment.
 
         Returns:
-            JSONDict: Placeholder for the updated group assignment.
-
+            JSONDict: Confirmation of the updated group assignment.
         """
-        raise NotImplementedError()
 
-    def sell_shares(
+        json = {"groupId": groupId, "remove": remove}
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/group", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def sell_shares(
         self,
         market_id: str,
         outcome: Optional[str] = None,
@@ -924,12 +1070,25 @@ class ManifoldClient:
             answerId: Optional answer identifier for multi-choice markets.
 
         Returns:
-            JSONDict: Placeholder for the resulting transaction.
+            JSONDict: Details about the resulting transaction.
 
+        Raises:
+            ValueError: If no outcome is provided.
         """
-        raise NotImplementedError()
 
-    def list_managrams(
+        if outcome is None:
+            raise ValueError("Must specify an outcome when selling shares")
+        json: JSONDict = {"outcome": outcome}
+        if shares is not None:
+            json["shares"] = shares
+        if answerId is not None:
+            json["answerId"] = answerId
+        data = await self._request_json(
+            "POST", f"/market/{market_id}/sell", json_data=json, auth=True
+        )
+        return cast(JSONDict, data)
+
+    async def list_managrams(
         self,
         toId: Optional[str] = None,
         fromId: Optional[str] = None,
@@ -947,12 +1106,24 @@ class ManifoldClient:
             after: Optional createdTime lower bound.
 
         Returns:
-            list[JSONDict]: Placeholder for the managram list.
-
+            list[JSONDict]: Managrams that match the requested filters.
         """
-        raise NotImplementedError()
 
-    def send_managram(
+        params: dict[str, Any] = {}
+        if toId is not None:
+            params["toId"] = toId
+        if fromId is not None:
+            params["fromId"] = fromId
+        if limit is not None:
+            params["limit"] = limit
+        if before is not None:
+            params["before"] = before
+        if after is not None:
+            params["after"] = after
+        data = await self._request_json("GET", "/managrams", params=params or None)
+        return cast(list[JSONDict], data)
+
+    async def send_managram(
         self, toIds: Sequence[str], amount: int, message: Optional[str] = None
     ) -> JSONDict:
         """Send a managram via POST /v0/managram.
@@ -963,12 +1134,16 @@ class ManifoldClient:
             message: Optional note to attach.
 
         Returns:
-            JSONDict: Placeholder for the transaction payload.
-
+            JSONDict: Details about the transfer transaction.
         """
-        raise NotImplementedError()
 
-    def get_leagues(
+        json: JSONDict = {"toIds": list(toIds), "amount": amount}
+        if message is not None:
+            json["message"] = message
+        data = await self._request_json("POST", "/managram", json_data=json, auth=True)
+        return cast(JSONDict, data)
+
+    async def get_leagues(
         self,
         userId: Optional[str] = None,
         season: Optional[int] = None,
@@ -982,10 +1157,18 @@ class ManifoldClient:
             cohort: Optional cohort slug.
 
         Returns:
-            list[JSONDict]: Placeholder for the league standings.
-
+            list[JSONDict]: The requested league standings.
         """
-        raise NotImplementedError()
+
+        params: dict[str, Any] = {}
+        if userId is not None:
+            params["userId"] = userId
+        if season is not None:
+            params["season"] = season
+        if cohort is not None:
+            params["cohort"] = cohort
+        data = await self._request_json("GET", "/leagues", params=params or None)
+        return cast(list[JSONDict], data)
 
     @overload
     def create_comment(
